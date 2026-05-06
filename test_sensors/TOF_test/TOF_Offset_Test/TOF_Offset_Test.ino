@@ -14,7 +14,7 @@ int max_sample = 0;
 int min_sample = 10000;
 int samples = 0;
 int position = 0;
-int offset_sum;
+float offset_sum;
 int distance;
 enum Mode mode = IDLE;
 
@@ -51,12 +51,13 @@ void loop() {
     // wait for input
     } 
     if (Serial.available() > 0){
-        int input = Serial.readStringUntil('\n');
+        String input = Serial.readStringUntil('\n');
+        input.trim();
         input.toLowerCase();
         if (input == 'y'){
             mode = MEASURE;
         } else if (input == 'n'){
-            int average_offset = offset_sum/position;
+            float average_offset = offset_sum/position;
             Serial.println(F("Average Offset Across all positions: \n\n"));
             Serial.println(average_offset);
             Serial.println(F("Offset measuring complete \n\n"));
@@ -78,7 +79,7 @@ void loop() {
         min_sample = min(min_sample, distance);
 
     } else if (num_samples >= NUM_SAMPLES){
-        int average = samples/num_samples;
+        float average = samples/num_samples;
         Serial.print("Average Distance Measured: ");
         Serial.println(average);
         Serial.print("Max Distance Measured: ");
@@ -91,8 +92,9 @@ void loop() {
         // wait for input
         } 
         if (Serial.available() > 0){
-            int input = Serial.readStringUntil('\n');
-            int offset = abs(average - input.toFloat(););
+            String input = Serial.readStringUntil('\n');
+            input.trim();
+            float offset = abs(average - input.toFloat());
             Serial.print("Offset Measured: ");
             Serial.println(offset);
             offset_sum += offset;
