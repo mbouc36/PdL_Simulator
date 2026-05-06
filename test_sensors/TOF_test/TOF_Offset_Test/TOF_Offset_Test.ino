@@ -60,7 +60,7 @@ void loop() {
             Serial.println(F("Average Offset Across all positions: \n\n"));
             Serial.println(average_offset);
             Serial.println(F("Offset measuring complete \n\n"));
-            
+
 
 
         } else {
@@ -92,7 +92,7 @@ void loop() {
         } 
         if (Serial.available() > 0){
             int input = Serial.readStringUntil('\n');
-            int offset = abs(average - input);
+            int offset = abs(average - input.toFloat(););
             Serial.print("Offset Measured: ");
             Serial.println(offset);
             offset_sum += offset;
