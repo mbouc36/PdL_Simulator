@@ -5,7 +5,10 @@
 
 Adafruit_VL53L0X lox = Adafruit_VL53L0X();
 int num_samples = 0;
+int max_sample = 0;
+int min_sample = 10000;
 int samples = 0;
+int distance;
 
 void setup() {
   Serial.begin(9600); // Start serial communication at 9600 baud
@@ -29,17 +32,20 @@ void setup() {
 void loop() {
   VL53L0X_RangingMeasurementData_t measure;
 
-  Serial.print("Reading a measurement... ");
   lox.rangingTest(&measure, false); // pass 'true' for debug output
 
   if (measure.RangeStatus != 4 && num_samples < NUM_SAMPLES) {  // 4 means out of range
-
     num_samples++;
-    samples += measure.RangeMilliMeter;
+    distance = measure.RangeMilliMeter;
+    samples += distance;
+    max_sample = max(max_sample, distance);
+    min_sample = min(min_sample, distance);
+
   } else if (num_samples >= NUM_SAMPLES){
     int average = samples/num_samples;
     Serial.print("Average Distance Measured: ");
     Serial.println(average);
+    return;
   }
     else {
     Serial.println("Out of range");
