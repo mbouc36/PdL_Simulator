@@ -66,6 +66,7 @@ void loop() {
             Serial.println(F("Average Offset Across all positions: \n\n"));
             Serial.println(average_offset);
             Serial.println(F("Offset measuring complete \n\n"));
+            while (true);
 
         } else {
             Serial.println(F("Invalid input"));
