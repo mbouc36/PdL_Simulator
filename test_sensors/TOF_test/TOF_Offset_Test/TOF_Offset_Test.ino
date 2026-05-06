@@ -59,6 +59,7 @@ void loop() {
         input.trim();
         input.toLowerCase();
         if (input == "y"){
+            Serial.println(F("Starting measurement \n\n"));
             mode = MEASURE;
         } else if (input == "n"){
             float average_offset = offset_sum/position;
@@ -82,14 +83,14 @@ void loop() {
 
     } else if (num_samples >= NUM_SAMPLES){
         float average = samples/num_samples;
-        Serial.print("Average Distance Measured: ");
+        Serial.print("Average Distance Measured (mm): ");
         Serial.println(average);
-        Serial.print("Max Distance Measured: ");
+        Serial.print("Max Distance Measured (mm): ");
         Serial.println(max_sample);
-        Serial.print("Min Distance Measured: ");
+        Serial.print("Min Distance Measured (mm): ");
         Serial.println(min_sample);
 
-        Serial.println(F("What is the physical measured distance? (number only) \n\n"));
+        Serial.println(F("What is the physical measured distance? (number in mm) \n\n"));
         while (Serial.available() == 0) {
         // wait for input
         } 
