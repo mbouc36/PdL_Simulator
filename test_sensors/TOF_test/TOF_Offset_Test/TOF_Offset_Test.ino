@@ -9,10 +9,10 @@ enum Mode {
 };
 
 Adafruit_VL53L0X lox = Adafruit_VL53L0X();
-int num_samples = 0;
-int max_sample = 0;
-int min_sample = 10000;
-int samples = 0;
+int num_samples;
+int max_sample;
+int min_sample;
+int samples;
 int position = 0;
 float offset_sum;
 int distance;
@@ -46,6 +46,10 @@ void loop() {
 
  
   if (mode == IDLE ){
+    num_samples = 0;
+    max_sample = 0;
+    min_sample = 10000;
+    samples = 0;
     Serial.println(F("Would you like to measure a distance? (y/n) \n\n"));
     while (Serial.available() == 0) {
     // wait for input
@@ -61,8 +65,6 @@ void loop() {
             Serial.println(F("Average Offset Across all positions: \n\n"));
             Serial.println(average_offset);
             Serial.println(F("Offset measuring complete \n\n"));
-
-
 
         } else {
             Serial.println(F("Invalid input"));
