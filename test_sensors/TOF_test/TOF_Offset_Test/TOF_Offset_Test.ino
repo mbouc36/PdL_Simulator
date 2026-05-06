@@ -54,9 +54,9 @@ void loop() {
         String input = Serial.readStringUntil('\n');
         input.trim();
         input.toLowerCase();
-        if (input == 'y'){
+        if (input == "y"){
             mode = MEASURE;
-        } else if (input == 'n'){
+        } else if (input == "n"){
             float average_offset = offset_sum/position;
             Serial.println(F("Average Offset Across all positions: \n\n"));
             Serial.println(average_offset);
