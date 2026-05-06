@@ -45,7 +45,12 @@ void loop() {
     int average = samples/num_samples;
     Serial.print("Average Distance Measured: ");
     Serial.println(average);
-    return;
+    Serial.print("Max Distance Measured: ");
+    Serial.println(max_sample);
+    Serial.print("Min Distance Measured: ");
+    Serial.println(min_sample);
+
+    while (true);
   }
     else {
     Serial.println("Out of range");
