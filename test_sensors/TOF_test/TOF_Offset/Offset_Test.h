@@ -38,7 +38,7 @@ public:
     }
 
     void detect_offset() {
-        init()
+        init();
 
         if (mode == IDLE){
             num_samples = 0;

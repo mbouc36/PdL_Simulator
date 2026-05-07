@@ -25,10 +25,10 @@ public:
         }
     }
 
-    int read_sensor() override {
+    float read_sensor() override {
         lox.rangingTest(&measure, false); // pass 'true' for debug output
         if (measure.RangeStatus != 4) {  // 4 means out of range
-            return measure.RangeMilliMeter;
+            return (float) measure.RangeMilliMeter;
         } else {
             return -1;
         }
