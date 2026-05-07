@@ -6,7 +6,7 @@
 #include <stdlib.h> 
 #include <Adafruit_VL53L0X.h>
 
-#include "test_sensors/Offset_Test_Template.h"
+#include "Offset_Test.h"
 
 class TOFOffset: public OffsetTest {
 
