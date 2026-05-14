@@ -1,0 +1,27 @@
+void calibrateSensors() {
+    const float axOffset = 456.30506221287214;
+    const float ayOffset = 150.86898594905324;
+    const float azOffset = 114.94042002821243;
+    const float axScale = 5.96793176747815e-05;
+    const float ayScale = 5.96793176747815e-05;
+    const float azScale = 5.96793176747815e-05;
+    const float gxOffset = -2977.3751823973225;
+    const float gyOffset = -339.4774936150127;
+    const float gzOffset = 5290.978759135588;
+    const float mxOffset = 68.58243094557884;
+    const float myOffset = 587.0414406456362;
+    const float mzOffset = 1209.6904829957984;
+    const float mxScale = 0.0002627662002515864;
+    const float myScale = 0.00024597451981347936;
+    const float mzScale = 0.00028647685730964306;
+
+    AxCal = (AxRaw - axOffset) * axScale;
+    AyCal = (AyRaw - ayOffset) * ayScale;
+    AzCal = (AzRaw - azOffset) * azScale;
+    GxCal = GxRaw*180/PI - gxOffset;
+    GyCal = GyRaw*180/PI - gyOffset;
+    GzCal = GzRaw*180/PI - gzOffset;
+    MxCal = (MxRaw - mxOffset) * mxScale;
+    MyCal = (MyRaw - myOffset) * myScale;
+    MzCal = (MzRaw - mzOffset) * mzScale;
+}
