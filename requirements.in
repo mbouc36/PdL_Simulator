@@ -3,3 +3,4 @@ PyOpenGL_accelerate
 pyqtgraph
 numpy
 pyserial
+matplotlib

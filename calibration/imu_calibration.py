@@ -31,6 +31,7 @@ ACC_MAG_MAX_POINTS = 2000  # Max points for accelerometer/magnetometer plots
 GYRO_MAX_POINTS = 100  # Max points for gyroscope plots
 TRAIL_MAX_POINTS = 100  # Max points for 3D magnetic trail
 GYRO_TIME_WINDOW = 5.0  # Time window for gyro plots in seconds
+GYRO_IN_RADIANS = False
 alpha = 0.3  # Low-pass filter constant for smoothing accelerometer/magnetometer data
 epsilon = 1e-6  # Small constant to prevent division by zero in calculations# --- Calibration Variables ---
 # Strategy: Store calibration parameters to correct sensor biases and scales.
@@ -591,9 +592,12 @@ def calibrateGyro():
                 continue
             ax, ay, az, gx, gy, gz, mx, my, mz = map(float, values)
             # Convert gyro data from rad/s to °/s
-            gx = gx * 180.0 / math.pi
-            gy = gy * 180.0 / math.pi
-            gz = gz * 180.0 / math.pi
+            if GYRO_IN_RADIANS:
+                print("I'm not doing anything")
+                gx = gx * 180.0 / math.pi
+                gy = gy * 180.0 / math.pi
+                gz = gz * 180.0 / math.pi
+
             gxSamples.append(gx)
             gySamples.append(gy)
             gzSamples.append(gz)
