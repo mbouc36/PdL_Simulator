@@ -4,3 +4,6 @@ pyqtgraph
 numpy
 pyserial
 matplotlib
+pyqt5
+ahrs
+scipy

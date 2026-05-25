@@ -38,6 +38,6 @@ void loop() {
   Serial.print(imuMag.m.y); Serial.print(",");
   Serial.println(imuMag.m.z);
 
-  delay(100);
+  //delay(100);
 }
 

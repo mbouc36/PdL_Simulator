@@ -1,2 +1,4 @@
 .DS_Store
 venv
+venv11
+__pycache__

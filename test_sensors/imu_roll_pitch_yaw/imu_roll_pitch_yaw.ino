@@ -4,7 +4,7 @@
 
 
 // Smoothing factor
-#define ALPHA .1
+#define ALPHA .2
 #define EPSILON .00001
 
 // Registers 
@@ -62,12 +62,12 @@ void calibrateSensors() {
     const float gxOffset =  -0.29664999999999997;
     const float gyOffset =  -0.22954999999999998;
     const float gzOffset = 0.10610000000000001;
-    const float mxOffset = -2688.4487689349876;
-    const float myOffset = 1529.2091567652617;
-    const float mzOffset = 1299.411256472524;
-    const float mxScale = 0.0002780708679958069;
-    const float myScale = 0.00025073835117261613;
-    const float mzScale = 0.00028245341970921926;
+    const float mxOffset = -4171.705068257773;
+    const float myOffset = 2161.1967715121864;
+    const float mzOffset = 646.1230745495316;
+    const float mxScale = 0.0002539340472678225;
+    const float myScale = 0.00023075245523682242;
+    const float mzScale = 0.0002662327848170976;
 
 
     AxCal = (AxRaw - axOffset) * axScale;
@@ -132,18 +132,22 @@ void loop() {
     float myH = MyCal*cos(phi) - MzCal*sin(phi);
 
     yawM = atan2(myH, mxH) * 180.0 / PI;
-
+    if (yawM < 0 ) yawM += 360;
+    yawC = yawM;
     rollC = alpha*(rollA) + (1-alpha)*(rollC+deltaRoll);
     pitchC = alpha*(pitchA) + (1-alpha)*(pitchC+deltaPitch);
+    // yawC = alpha*(yawM) + (1-alpha)*(yawC+deltaPitch);
     
-    float yawGyro = yawC + deltaYaw;
-    float yawError = yawM - yawGyro;
-    if (yawError > 180) yawError -= 360;
-    if (yawError < -180) yawError += 360;
-    yawC = yawGyro + alpha * yawError;
-    // keep yaw in -180 to 180
-    if (yawC > 180) yawC -= 360;
-    if (yawC < -180) yawC += 360;
+    
+    
+    // float yawGyro = yawC + deltaYaw;
+    // float yawError = yawM - yawGyro;
+    // if (yawError > 180) yawError -= 360;
+    // if (yawError < -180) yawError += 360;
+    // yawC = yawGyro + alpha * yawError;
+    // // keep yaw in -180 to 180
+    // if (yawC > 180) yawC -= 360;
+    // if (yawC < -180) yawC += 360;
 
 
     // Serial.print("dt: "); Serial.print(dt);
@@ -156,15 +160,15 @@ void loop() {
     // Serial.print("LL:");Serial.print(-90);Serial.print(',');
     // Serial.print("UL:");Serial.println(90);
 
-    Serial.print("rollC:");Serial.print(rollC);Serial.print(',');
-    Serial.print("pitchC:");Serial.print(pitchC);Serial.print(',');
-    Serial.print("yawC:");Serial.print(yawC);Serial.print(',');
-    Serial.print("LL:");Serial.print(-90);Serial.print(',');
-    Serial.print("UL:");Serial.println(90);
-    // Serial.print(millis());Serial.print(',');
-    // Serial.print(rollC);Serial.print(',');
-    // Serial.print(pitchC);Serial.print(',');
-    // Serial.println(yawC);
+    // Serial.print("rollC:");Serial.print(rollC);Serial.print(',');
+    // Serial.print("pitchC:");Serial.print(pitchC);Serial.print(',');
+    // Serial.print("yawC:");Serial.print(yawC);Serial.print(',');
+    // Serial.print("LL:");Serial.print(-90);Serial.print(',');
+    // Serial.print("UL:");Serial.println(90);
+    Serial.print(millis());Serial.print(',');
+    Serial.print(rollC);Serial.print(',');
+    Serial.print(pitchC);Serial.print(',');
+    Serial.println(yawC);
 
     delay(100);
 }

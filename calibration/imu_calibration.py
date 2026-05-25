@@ -8,6 +8,7 @@ Description: Reads raw IMU data over serial and provides functions to aid in the
 
 # Display graphs of live data
 
+import json
 import serial
 import numpy as np
 from PyQt5 import QtWidgets, QtCore, QtGui
@@ -126,6 +127,7 @@ except serial.SerialException as e:
 
 
 def generateArduinoCode(to_file=False):
+    save_raw_calibration_data()
     code = [
         "void calibrateSensors() {",
         "    const float axOffset = " + str(accOffset["x"]) + ";",
@@ -173,6 +175,45 @@ def generateArduinoCode(to_file=False):
             msg.exec_()
             return False
     return True  # --- Load Calibration Files ---
+
+def save_raw_calibration_data(filename="cal_data.json"):
+    """
+    Save the raw calibration data to be used by other files
+    """
+
+    gOffset = {"x": gxOffset, "y": gyOffset, "z": gzOffset}
+    cal_data = {
+        "accOffset": accOffset,
+        "accScale": accScale,
+        "gOffset" : gOffset,
+        "magOffset": magOffset,
+        "magScale": magScale
+    }
+
+    try:
+        file_path = os.path.join(os.getcwd(), filename)
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(cal_data, f, indent=4)
+
+        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+            with open(file_path, "r", encoding="utf-8") as f:
+                loaded_data = json.load(f)
+
+                if loaded_data:
+                    return True
+                raise Exception("JSON file is empty")
+
+        raise Exception("File was not created or is inaccessible")
+
+    except Exception as e:
+        msg = QtWidgets.QMessageBox()
+        msg.setWindowTitle("File Write Error")
+        msg.setText(f"Error writing {filename}: {e}")
+        msg.exec_()
+
+
+
 
 
 def loadCalibration():
@@ -593,7 +634,6 @@ def calibrateGyro():
             ax, ay, az, gx, gy, gz, mx, my, mz = map(float, values)
             # Convert gyro data from rad/s to °/s
             if GYRO_IN_RADIANS:
-                print("I'm not doing anything")
                 gx = gx * 180.0 / math.pi
                 gy = gy * 180.0 / math.pi
                 gz = gz * 180.0 / math.pi
