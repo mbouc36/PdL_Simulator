@@ -31,13 +31,16 @@ void loop() {
   Serial.print(imu6.a.x); Serial.print(",");
   Serial.print(imu6.a.y); Serial.print(",");
   Serial.print(imu6.a.z); Serial.print(",");
-  Serial.print(imu6.g.x * sensitivity); Serial.print(",");
-  Serial.print(imu6.g.y * sensitivity); Serial.print(",");
-  Serial.print(imu6.g.z * sensitivity); Serial.print(",");
+  // Serial.print(imu6.g.x * sensitivity); Serial.print(",");
+  // Serial.print(imu6.g.y * sensitivity); Serial.print(",");
+  // Serial.print(imu6.g.z * sensitivity); Serial.print(",");
+  Serial.print(imu6.g.x); Serial.print(",");
+  Serial.print(imu6.g.y); Serial.print(",");
+  Serial.print(imu6.g.z); Serial.print(",");
   Serial.print(imuMag.m.x); Serial.print(",");
   Serial.print(imuMag.m.y); Serial.print(",");
   Serial.println(imuMag.m.z);
 
-  //delay(100);
+  delay(100);
 }
 

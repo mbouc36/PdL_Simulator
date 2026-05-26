@@ -25,7 +25,11 @@ import math  # --- Serial Port Configuration ---
 """
 Note: for mac use `ls /dev/cu.*` to find ports
 """
-SERIAL_PORT = "/dev/cu.wchusbserial1330"  # Serial port for IMU communication (adjust as needed)
+
+
+SERIAL_PORT = (
+    "/dev/cu.wchusbserial1330"  # Serial port for IMU communication (adjust as needed)
+)
 BAUD_RATE = 115200  # Baud rate matching IMU configuration
 TIMEOUT = 0.1  # Serial read TIMEOUT in seconds
 ACC_MAG_MAX_POINTS = 2000  # Max points for accelerometer/magnetometer plots
@@ -33,6 +37,21 @@ GYRO_MAX_POINTS = 100  # Max points for gyroscope plots
 TRAIL_MAX_POINTS = 100  # Max points for 3D magnetic trail
 GYRO_TIME_WINDOW = 5.0  # Time window for gyro plots in seconds
 GYRO_IN_RADIANS = False
+
+# Filename configurations
+CAL_DATA_FOLDER = os.path.dirname(os.path.abspath(__file__))
+ACC_FILE_NAME = "accCal.txt"
+CAL_FILE_NAME = "calData.txt"
+G_FILE_NAME = "gCal.txt"
+MAG_FILE_NAME = "magCal.txt"
+JSON_FILE_NAME = "cal_data.json"
+acc_cal_file = os.path.join(CAL_DATA_FOLDER, ACC_FILE_NAME)
+cal_data_file = os.path.join(CAL_DATA_FOLDER, CAL_FILE_NAME)
+g_cal_file = os.path.join(CAL_DATA_FOLDER, G_FILE_NAME)
+mag_cal_file = os.path.join(CAL_DATA_FOLDER, MAG_FILE_NAME)
+cal_json_file = os.path.join(CAL_DATA_FOLDER, JSON_FILE_NAME)
+
+# Sensor and filter data
 alpha = 0.3  # Low-pass filter constant for smoothing accelerometer/magnetometer data
 epsilon = 1e-6  # Small constant to prevent division by zero in calculations# --- Calibration Variables ---
 # Strategy: Store calibration parameters to correct sensor biases and scales.
@@ -43,6 +62,10 @@ gyOffset = 0.0  # Gyroscope y-axis offset (°/s)
 gzOffset = 0.0  # Gyroscope z-axis offset (°/s)
 accCalibrating = False  # Flag for accelerometer calibration mode
 magCalibrating = False  # Flag for magnetometer calibration mode
+
+# Name to differentiate sensors
+sensor_name = ""
+
 accMin = {
     "x": float("inf"),
     "y": float("inf"),
@@ -127,7 +150,7 @@ except serial.SerialException as e:
 
 
 def generateArduinoCode(to_file=False):
-    save_raw_calibration_data()
+    save_cal_data_json()
     code = [
         "void calibrateSensors() {",
         "    const float axOffset = " + str(accOffset["x"]) + ";",
@@ -159,11 +182,11 @@ def generateArduinoCode(to_file=False):
     ]
     if to_file:
         try:
-            file_path = os.path.join(os.getcwd(), "calData.txt")
-            with open(file_path, "w", encoding="utf-8") as f:
+            
+            with open(cal_data_file, "w", encoding="utf-8") as f:
                 f.write("\n".join(code) + "\n")
-            if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-                with open(file_path, "r", encoding="utf-8") as f:
+            if os.path.exists(cal_data_file) and os.path.getsize(cal_data_file) > 0:
+                with open(cal_data_file, "r", encoding="utf-8") as f:
                     if f.read().strip():
                         return True
                     raise Exception("File is empty")
@@ -171,33 +194,41 @@ def generateArduinoCode(to_file=False):
         except Exception as e:
             msg = QtWidgets.QMessageBox()
             msg.setWindowTitle("File Write Error")
-            msg.setText("Error writing calData.txt: " + str(e))
+            msg.setText(f"Error writing {cal_data_file}: " + str(e))
             msg.exec_()
             return False
     return True  # --- Load Calibration Files ---
 
-def save_raw_calibration_data(filename="cal_data.json"):
+
+def save_cal_data_json():
     """
     Save the raw calibration data to be used by other files
     """
+    try:
+        with open(cal_json_file, "r", encoding="utf-8") as f:
+            config = json.load(f)
+    except Exception as e:
+        print(f"Error reading from {cal_json_file}: {e}")
 
+    
     gOffset = {"x": gxOffset, "y": gyOffset, "z": gzOffset}
     cal_data = {
         "accOffset": accOffset,
         "accScale": accScale,
-        "gOffset" : gOffset,
+        "gOffset": gOffset,
         "magOffset": magOffset,
-        "magScale": magScale
+        "magScale": magScale,
     }
 
+    config[sensor_name] = cal_data
+
     try:
-        file_path = os.path.join(os.getcwd(), filename)
 
-        with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(cal_data, f, indent=4)
+        with open(cal_json_file, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=4)
 
-        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-            with open(file_path, "r", encoding="utf-8") as f:
+        if os.path.exists(cal_json_file) and os.path.getsize(cal_json_file) > 0:
+            with open(cal_json_file, "r", encoding="utf-8") as f:
                 loaded_data = json.load(f)
 
                 if loaded_data:
@@ -209,27 +240,24 @@ def save_raw_calibration_data(filename="cal_data.json"):
     except Exception as e:
         msg = QtWidgets.QMessageBox()
         msg.setWindowTitle("File Write Error")
-        msg.setText(f"Error writing {filename}: {e}")
+        msg.setText(f"Error writing {cal_json_file}: {e}")
         msg.exec_()
-
-
-
 
 
 def loadCalibration():
     global gxOffset, gyOffset, gzOffset, accOffset, accScale, magOffset, magScale, plots, mag3DView
     loaded = []
     try:
-        if os.path.exists("gCal.txt"):
-            with open("gCal.txt", "r") as f:
+        if os.path.exists(g_cal_file):
+            with open(g_cal_file, "r") as f:
                 values = list(map(float, f.readline().strip().split(",")))
                 if len(values) == 3:
                     gxOffset, gyOffset, gzOffset = values  # Load gyro offsets (°/s)
                     loaded.append(
                         f"Gyro (°/s): Gx={gxOffset:.6f}, Gy={gyOffset:.6f}, Gz={gzOffset:.6f}"
                     )
-        if os.path.exists("accCal.txt"):
-            with open("accCal.txt", "r") as f:
+        if os.path.exists(acc_cal_file):
+            with open(acc_cal_file, "r") as f:
                 values = list(map(float, f.readline().strip().split(",")))
                 if len(values) == 6:
                     (
@@ -248,8 +276,8 @@ def loadCalibration():
                         f"Acc (m/s²): Offsets x={accOffset['x']:.6f}, y={accOffset['y']:.6f}, z={accOffset['z']:.6f}, "
                         + f"Scales x={accScale['x']:.6f}, y={accScale['y']:.6f}, z={accScale['z']:.6f}"
                     )
-        if os.path.exists("magCal.txt"):
-            with open("magCal.txt", "r") as f:
+        if os.path.exists(mag_cal_file):
+            with open(mag_cal_file, "r") as f:
                 values = list(map(float, f.readline().strip().split(",")))
                 if len(values) == 6:
                     (
@@ -292,12 +320,12 @@ def saveCalibration():
     global gxOffset, gyOffset, gzOffset, accOffset, accScale, magOffset, magScale
     saved = []
     try:
-        with open("gCal.txt", "w") as f:
+        with open(g_cal_file, "w") as f:
             f.write(f"{gxOffset},{gyOffset},{gzOffset}\n")
             saved.append(
                 f"Gyro (°/s): Gx={gxOffset:.6f}, Gy={gyOffset:.6f}, Gz={gzOffset:.6f}"
             )
-        with open("accCal.txt", "w") as f:
+        with open(acc_cal_file, "w") as f:
             f.write(
                 f"{accOffset['x']},{accScale['x']},{accOffset['y']},{accScale['y']},{accOffset['z']},{accScale['z']}\n"
             )
@@ -305,7 +333,7 @@ def saveCalibration():
                 f"Acc (m/s²): Offsets x={accOffset['x']:.6f}, y={accOffset['y']:.6f}, z={accOffset['z']:.6f}, "
                 + f"Scales x={accScale['x']:.6f}, y={accScale['y']:.6f}, z={accScale['z']:.6f}"
             )
-        with open("magCal.txt", "w") as f:
+        with open(mag_cal_file, "w") as f:
             f.write(
                 f"{magOffset['x']},{magScale['x']},{magOffset['y']},{magScale['y']},{magOffset['z']},{magScale['z']}\n"
             )
@@ -651,12 +679,12 @@ def calibrateGyro():
     gyOffset = np.mean(gySamples)  # Offset in °/s
     gzOffset = np.mean(gzSamples)  # Offset in °/s
     try:
-        with open("gCal.txt", "w") as f:
+        with open(g_cal_file, "w") as f:
             f.write(f"{gxOffset},{gyOffset},{gzOffset}\n")
         msg = QtWidgets.QMessageBox()
         msg.setWindowTitle("Gyro Calibration Complete")
         msg.setText(
-            f"Offsets (°/s): Gx={gxOffset:.6f}, Gy={gyOffset:.6f}, Gz={gzOffset:.6f}\nSaved to gCal.txt"
+            f"Offsets (°/s): Gx={gxOffset:.6f}, Gy={gyOffset:.6f}, Gz={gzOffset:.6f}\nSaved to {g_cal_file}"
         )
         msg.exec_()
         generateArduinoCode()
@@ -700,7 +728,7 @@ def calibrateAcc():
             accRaw["y"] = np.empty(0)
             accRaw["z"] = np.empty(0)
             try:
-                with open("accCal.txt", "w") as f:
+                with open(acc_cal_file, "w") as f:
                     f.write(
                         f"{accOffset['x']},{accScale['x']},{accOffset['y']},{accScale['y']},{accOffset['z']},{accScale['z']}\n"
                     )
@@ -778,7 +806,7 @@ def calibrateMag():
             verticalComponent.setData(pos=np.array([[0, 0, 0], [0, 0, 0]]))
 
             try:
-                with open("magCal.txt", "w") as f:
+                with open(mag_cal_file, "w") as f:
                     f.write(
                         f"{magOffset['x']},{magScale['x']},{magOffset['y']},{magScale['y']},{magOffset['z']},{magScale['z']}\n"
                     )
@@ -787,7 +815,7 @@ def calibrateMag():
                 msg.setText(
                     f"Offsets (arb. units): Mx={magOffset['x']:.6f}, My={magOffset['y']:.6f}, Mz={magOffset['z']:.6f}\n"
                     f"Scales (per-axis to ±1): X={magScale['x']:.6f}, Y={magScale['y']:.6f}, Z={magScale['z']:.6f}\n"
-                    f"Saved to magCal.txt\n"
+                    f"Saved to {mag_cal_file}\n"
                     f"Your XZ circle will now be perfectly round from -1 to +1"
                 )
                 msg.exec_()
@@ -1136,7 +1164,8 @@ def updatePlots():
     except Exception:
         pass  # --- Connect Buttons and Start Application ---
 
-
+sensor_name = input("Name the sensor: ")
+print(f"The name of the sensor is: {sensor_name}")
 calibrateGyroButton.clicked.connect(calibrateGyro)
 calibrateAccButton.clicked.connect(calibrateAcc)
 calibrateMagButton.clicked.connect(calibrateMag)
