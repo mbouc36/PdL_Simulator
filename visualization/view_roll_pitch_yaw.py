@@ -1,99 +1,72 @@
-import serial
-import numpy as np
+import socket
+import time
+from collections import deque
+
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from matplotlib.animation import FuncAnimation
 
-SERIAL_PORT = "/dev/cu.wchusbserial1330"  
-BAUD_RATE = 115200
+UDP_IP = "127.0.0.1"
+UDP_PORT = 5005
+MAX_POINTS = 600
 
-ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind((UDP_IP, UDP_PORT))
+sock.setblocking(False)
 
-def rotation_matrix(roll, pitch, yaw):
-    r = np.radians(roll)
-    p = np.radians(pitch)
-    y = np.radians(yaw)
+times = deque(maxlen=MAX_POINTS)
+rolls = deque(maxlen=MAX_POINTS)
+pitches = deque(maxlen=MAX_POINTS)
+yaws = deque(maxlen=MAX_POINTS)
 
-    Rx = np.array([
-        [1, 0, 0],
-        [0, np.cos(r), -np.sin(r)],
-        [0, np.sin(r), np.cos(r)]
-    ])
+fig, ax = plt.subplots()
+roll_line, = ax.plot([], [], label="Roll")
+pitch_line, = ax.plot([], [], label="Pitch")
+yaw_line, = ax.plot([], [], label="Yaw")
 
-    Ry = np.array([
-        [np.cos(p), 0, np.sin(p)],
-        [0, 1, 0],
-        [-np.sin(p), 0, np.cos(p)]
-    ])
+ax.set_title("Live IMU Orientation")
+ax.set_xlabel("Time (s)")
+ax.set_ylabel("Angle (degrees)")
+ax.legend()
+ax.grid(True)
 
-    Rz = np.array([
-        [np.cos(y), -np.sin(y), 0],
-        [np.sin(y), np.cos(y), 0],
-        [0, 0, 1]
-    ])
+start_time = time.time()
 
-    return Rz @ Ry @ Rx
+def update(frame):
+    while True:
+        try:
+            data, _ = sock.recvfrom(1024)
+            t, roll, pitch, yaw = map(float, data.decode().split(","))
+
+            times.append(t - start_time)
+            rolls.append(roll)
+            pitches.append(pitch)
+            yaws.append(yaw)
+
+        except BlockingIOError:
+            break
+
+    if len(times) > 0:
+        roll_line.set_data(times, rolls)
+        pitch_line.set_data(times, pitches)
+        yaw_line.set_data(times, yaws)
+
+        # Dynamic x-axis: show last 3 seconds
+        xmin = max(0, times[-1] - 3)
+        xmax = times[-1] + 0.1
+        ax.set_xlim(xmin, xmax)
+
+        # Dynamic y-axis: include roll, pitch, and yaw
+        all_values = list(rolls) + list(pitches) + list(yaws)
+
+        ymin = min(all_values)
+        ymax = max(all_values)
+
+        padding = max(10, 0.1 * (ymax - ymin))
+
+        ax.set_ylim(ymin - padding, ymax + padding)
+
+    return roll_line, pitch_line, yaw_line
 
 
-# Flat rectangular plane
-plane = np.array([
-    [-1, -0.6, 0],
-    [ 1, -0.6, 0],
-    [ 1,  0.6, 0],
-    [-1,  0.6, 0]
-])
-
-plt.ion()
-fig = plt.figure()
-ax = fig.add_subplot(111, projection="3d")
-
-while True:
-    try:
-        line = ser.readline().decode(errors="ignore").strip()
-
-        if not line:
-            continue
-
-        time, roll, pitch, yaw = map(float, line.split(","))
-
-        R = rotation_matrix(roll, pitch, yaw)
-        rotated_plane = plane @ R.T
-
-        ax.clear()
-
-        ax.add_collection3d(
-            Poly3DCollection(
-                [rotated_plane],
-                alpha=0.5,
-                edgecolor="black"
-            )
-        )
-
-        # Draw local axes
-        origin = np.array([0, 0, 0])
-        x_axis = R @ np.array([1.5, 0, 0])
-        y_axis = R @ np.array([0, 1.5, 0])
-        z_axis = R @ np.array([0, 0, 1.5])
-
-        ax.quiver(*origin, *x_axis)
-        ax.quiver(*origin, *y_axis)
-        ax.quiver(*origin, *z_axis)
-
-        ax.set_xlim([-2, 2])
-        ax.set_ylim([-2, 2])
-        ax.set_zlim([-2, 2])
-
-        ax.set_xlabel("X")
-        ax.set_ylabel("Y")
-        ax.set_zlabel("Z")
-
-        ax.set_title(f"Roll={roll:.1f}, Pitch={pitch:.1f}, Yaw={yaw:.1f}")
-
-        plt.pause(0.01)
-
-    except ValueError:
-        print("Bad line:", line)
-
-    except KeyboardInterrupt:
-        break
-
-ser.close()
+ani = FuncAnimation(fig, update, interval=30)
+plt.show()
