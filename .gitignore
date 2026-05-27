@@ -2,3 +2,4 @@
 venv
 venv11
 __pycache__
+local_config.json

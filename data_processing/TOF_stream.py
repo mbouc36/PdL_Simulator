@@ -1,19 +1,23 @@
+import os
 import serial
-from pathlib import Path
 from collections import deque
+import sys
 
-PORT = "COM4"
-BAUD = 9600
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
+from update_config import load_config
 
-COEFF_FILE = Path(r"C:\Users\SYSC4907\Documents\Arduino\coeff.txt")
+config = load_config()
+
+PORT = config["serial_port"]
+BAUD = config["baud_rate"]
+
+PARENT_DIR = os.path.dirname(os.path.abspath(__file__))
+COEFF_FILE = os.path.join(PARENT_DIR, "../calibration/tof_calibration/coeff.txt")
 WINDOW_SIZE = 20
 
 
 def load_coefficients(path):
-    coeffs = {
-        "SENSOR_1": {},
-        "SENSOR_2": {}
-    }
+    coeffs = {"SENSOR_1": {}, "SENSOR_2": {}}
 
     current_sensor = None
 
@@ -48,12 +52,12 @@ def load_coefficients(path):
 
 def correct_distance(raw, c):
     return (
-        c["a5"] * raw**5 +
-        c["a4"] * raw**4 +
-        c["a3"] * raw**3 +
-        c["a2"] * raw**2 +
-        c["a1"] * raw +
-        c["a0"]
+        c["a5"] * raw**5
+        + c["a4"] * raw**4
+        + c["a3"] * raw**3
+        + c["a2"] * raw**2
+        + c["a1"] * raw
+        + c["a0"]
     )
 
 
@@ -119,16 +123,13 @@ while True:
         window2.append(corrected2)
         avg2 = sum(window2) / len(window2)
 
-    #raw1_str = f"{raw1:.2f}" if raw1 >= 0 else "OUT_OF_RANGE"
-    #raw2_str = f"{raw2:.2f}" if raw2 >= 0 else "OUT_OF_RANGE"
+    # raw1_str = f"{raw1:.2f}" if raw1 >= 0 else "OUT_OF_RANGE"
+    # raw2_str = f"{raw2:.2f}" if raw2 >= 0 else "OUT_OF_RANGE"
 
     corrected1_str = f"{corrected1:.2f}" if corrected1 is not None else "OUT_OF_RANGE"
     corrected2_str = f"{corrected2:.2f}" if corrected2 is not None else "OUT_OF_RANGE"
 
-    #avg1_str = f"{avg1:.2f}" if avg1 is not None else "OUT_OF_RANGE"
-    #avg2_str = f"{avg2:.2f}" if avg2 is not None else "OUT_OF_RANGE"
+    # avg1_str = f"{avg1:.2f}" if avg1 is not None else "OUT_OF_RANGE"
+    # avg2_str = f"{avg2:.2f}" if avg2 is not None else "OUT_OF_RANGE"
 
-    print(
-        f" {corrected1_str}"
-        f" {corrected2_str}"
-    )
+    print(f" {corrected1_str}" f" {corrected2_str}")

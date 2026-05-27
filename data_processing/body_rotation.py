@@ -5,9 +5,16 @@ import numpy as np
 from ahrs.filters import Madgwick
 from ahrs.common.quaternion import Quaternion
 from imu_helper_functions import get_imu_data, get_calibration_data
+import os
+import sys
 
-SERIAL_PORT = "/dev/cu.wchusbserial1330"
-BAUD_RATE = 115200
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
+from update_config import load_config
+
+config = load_config()
+
+SERIAL_PORT = config["serial_port"]
+BAUD_RATE = config["baud_rate"]
 FREQUENCY = 200.0
 GAIN = 0.033
 

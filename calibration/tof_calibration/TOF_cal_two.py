@@ -1,15 +1,22 @@
-#Calibration python script for 2 TOF sensors 
-# Applies 5th order calibration/offset function and saves coefficients 
+# Calibration python script for 2 TOF sensors
+# Applies 5th order calibration/offset function and saves coefficients
 
+import os
 import serial
 import numpy as np
-from pathlib import Path
+import sys
 
-PORT = "COM4"
-BAUD = 9600
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
+from update_config import load_config
 
-OUTPUT_FILE = Path(r"C:\Users\SYSC4907\Documents\Arduino\coeff.txt")
-RAW_DATA_FILE = Path(r"C:\Users\SYSC4907\Documents\Arduino\dual_tof_calibration_data.csv")
+config = load_config()
+
+PORT = config["serial_port"]
+BAUD = config["baud_rate"]
+
+PARENT_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_FILE = os.path.join(PARENT_DIR, "coeff.txt")
+RAW_DATA_FILE = os.path.join(PARENT_DIR, "dual_tof_calibration_data.csv")
 
 POLY_DEGREE = 5
 

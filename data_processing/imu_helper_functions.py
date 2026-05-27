@@ -4,12 +4,19 @@ import json
 import serial
 import time
 import os
+import sys
 
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
+from update_config import load_config
+
+config = load_config()
 
 GAUSS_TO_MILLI_TESLA_CONVERSION = 10
-FILENAME = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../calibration/cal_data.json")
-SERIAL_PORT = "/dev/cu.wchusbserial1330"
-BAUD_RATE = 115200
+FILENAME = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "../calibration/cal_data.json"
+)
+SERIAL_PORT = config["serial_port"]
+BAUD_RATE = config["baud_rate"]
 
 
 def get_calibration_data(filename=FILENAME):
@@ -34,9 +41,7 @@ def get_imu_data(values, calibration_data):
     """
     Read Raw Sensor Data and use calibrated values
     """
-    accOffset, accScale, gOffset, magOffset, magScale = map(
-        dict, calibration_data
-    )
+    accOffset, accScale, gOffset, magOffset, magScale = map(dict, calibration_data)
     ax, ay, az, gx, gy, gz, mx, my, mz = map(float, values)
 
     axCal = (ax - accOffset["x"]) * accScale["x"]

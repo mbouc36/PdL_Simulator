@@ -2,7 +2,7 @@
 Filename: imu_calibration.py
 Author: Michael Boucouvalas
 Date: 2026, May 13th
-Version: 1.0
+Version: 1.5
 Description: Reads raw IMU data over serial and provides functions to aid in the calibration process
 """
 
@@ -17,20 +17,18 @@ import pyqtgraph.opengl as gl
 from pyqtgraph.opengl import GLViewWidget, GLLinePlotItem, GLMeshItem
 import time
 import os
-import math  # --- Serial Port Configuration ---
+import sys
+import math
 
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
+from update_config import load_config
+
+config = load_config()
 # Strategy: Set up serial communication with the IMU to receive raw sensor data:
 # ax, ay, az (m/s²), gx, gy, gz (rad/s), mx, my, mz (arbitrary units from QMC5883L).
 # Convert gyro data to °/s immediately after reading for consistency with plots and calibration.
-"""
-Note: for mac use `ls /dev/cu.*` to find ports
-"""
-
-
-SERIAL_PORT = (
-    "/dev/cu.wchusbserial1330"  # Serial port for IMU communication (adjust as needed)
-)
-BAUD_RATE = 115200  # Baud rate matching IMU configuration
+SERIAL_PORT = config["serial_port"]
+BAUD_RATE = config["baud_rate"]  # Baud rate matching IMU configuration
 TIMEOUT = 0.1  # Serial read TIMEOUT in seconds
 ACC_MAG_MAX_POINTS = 2000  # Max points for accelerometer/magnetometer plots
 GYRO_MAX_POINTS = 100  # Max points for gyroscope plots
@@ -182,7 +180,7 @@ def generateArduinoCode(to_file=False):
     ]
     if to_file:
         try:
-            
+
             with open(cal_data_file, "w", encoding="utf-8") as f:
                 f.write("\n".join(code) + "\n")
             if os.path.exists(cal_data_file) and os.path.getsize(cal_data_file) > 0:
@@ -210,7 +208,6 @@ def save_cal_data_json():
     except Exception as e:
         print(f"Error reading from {cal_json_file}: {e}")
 
-    
     gOffset = {"x": gxOffset, "y": gyOffset, "z": gzOffset}
     cal_data = {
         "accOffset": accOffset,
@@ -1163,6 +1160,7 @@ def updatePlots():
         attitudeItems["yaw_needle"].setData(x=[0, needleX], y=[0, needleY])
     except Exception:
         pass  # --- Connect Buttons and Start Application ---
+
 
 sensor_name = input("Name the sensor: ")
 print(f"The name of the sensor is: {sensor_name}")

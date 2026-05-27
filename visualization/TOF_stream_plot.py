@@ -3,9 +3,16 @@ from pathlib import Path
 from collections import deque
 import time
 import matplotlib.pyplot as plt
+import os
+import sys
 
-PORT = "COM4"
-BAUD = 9600
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
+from update_config import load_config
+
+config = load_config()
+
+PORT = config["serial_port"]
+BAUD = config["baud_rate"]
 
 COEFF_FILE = Path(r"C:\Users\SYSC4907\Documents\Arduino\coeff.txt")
 WINDOW_SIZE = 20
@@ -13,10 +20,7 @@ PLOT_DURATION_SECONDS = 30
 
 
 def load_coefficients(path):
-    coeffs = {
-        "SENSOR_1": {},
-        "SENSOR_2": {}
-    }
+    coeffs = {"SENSOR_1": {}, "SENSOR_2": {}}
 
     current_sensor = None
 
@@ -51,12 +55,12 @@ def load_coefficients(path):
 
 def correct_distance(raw, c):
     return (
-        c["a5"] * raw**5 +
-        c["a4"] * raw**4 +
-        c["a3"] * raw**3 +
-        c["a2"] * raw**2 +
-        c["a1"] * raw +
-        c["a0"]
+        c["a5"] * raw**5
+        + c["a4"] * raw**4
+        + c["a3"] * raw**3
+        + c["a2"] * raw**2
+        + c["a1"] * raw
+        + c["a0"]
     )
 
 

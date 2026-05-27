@@ -1,4 +1,4 @@
-%Stream raw raws to the python TOF_stream.py script 
+//Stream raw raws to the python TOF_stream.py script 
 
 
 #include <Wire.h>
@@ -14,7 +14,7 @@ Adafruit_VL53L0X lox1 = Adafruit_VL53L0X();
 Adafruit_VL53L0X lox2 = Adafruit_VL53L0X();
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   Wire.begin();
 
   pinMode(XSHUT_1, OUTPUT);
