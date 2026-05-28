@@ -8,7 +8,8 @@ from imu_helper_functions import get_imu_data, get_calibration_data
 import os
 import sys
 
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
+
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
 
 config = load_config()

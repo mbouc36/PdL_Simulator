@@ -33,13 +33,20 @@ def update_config():
     serial_port = input("What is your serial port: ")
     print(f"Serial port is: {serial_port}")
 
-    baud_rate = input("What is your baud rate: ")
+    baud_rate = input("What is your baud rate (default 115200): ")
+
+    if baud_rate == "":
+        baud_rate = 115200
+    elif baud_rate != 115200:
+        print("Arduino script will need to be updated manually")
 
     data = {"serial_port": serial_port, "baud_rate": baud_rate}
 
     # Create file if doesn't exist else update
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
+
+    print(f"\n{CONFIG_PATH} Updated")
 
 
 if __name__ == "__main__":

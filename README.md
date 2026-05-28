@@ -7,8 +7,10 @@ Contains code for IMU (MinIMU-9) and ToF (VL53L0X) sensors as well as Load Cell 
 
 ## Install Requirements
 `pip install pip-tools`
+
 `pip install -r requirements.txt`
 
 ## Setup Config
-tip: To find serial ports on Mac run: `ls /dev/cu.*`
+Tip: To find serial ports on Mac run: `ls /dev/cu.*`
+
 `python3 update_config.py`

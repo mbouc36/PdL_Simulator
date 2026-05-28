@@ -6,25 +6,27 @@ import time
 import os
 import sys
 
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
 
 config = load_config()
 
 GAUSS_TO_MILLI_TESLA_CONVERSION = 10
 FILENAME = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "../calibration/cal_data.json"
+    os.path.dirname(os.path.abspath(__file__)), "../calibration/imu_calibration/cal_data.json"
 )
 SERIAL_PORT = config["serial_port"]
 BAUD_RATE = config["baud_rate"]
 
 
-def get_calibration_data(filename=FILENAME):
+def get_calibration_data( name="left", filename=FILENAME):
     """
     Read data from filename for IMU offset and scale data
     """
     with open(filename, "r", encoding="utf-8") as f:
         data = json.load(f)
+
+    data = data[name]
 
     accOffset = data["accOffset"]
     accScale = data["accScale"]
