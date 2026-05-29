@@ -81,3 +81,6 @@ def find_loop_frequency():
         prev_time = current_time
 
         print(dt)
+
+if __name__ == "__main__":
+    find_loop_frequency()

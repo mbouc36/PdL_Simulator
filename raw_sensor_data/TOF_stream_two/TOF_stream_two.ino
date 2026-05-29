@@ -43,34 +43,43 @@ void setup() {
     while (1);
   }
 
-  // High accuracy mode
-  lox1.configSensor(Adafruit_VL53L0X::VL53L0X_SENSE_HIGH_ACCURACY);
-  lox2.configSensor(Adafruit_VL53L0X::VL53L0X_SENSE_HIGH_ACCURACY);
+
+  // // High accuracy mode
+  // lox1.configSensor(Adafruit_VL53L0X::VL53L0X_SENSE_HIGH_ACCURACY);
+  // lox2.configSensor(Adafruit_VL53L0X::VL53L0X_SENSE_HIGH_ACCURACY);
+  lox1.setMeasurementTimingBudgetMicroSeconds(20000);
+  lox2.setMeasurementTimingBudgetMicroSeconds(20000);
+
+  lox1.startRangeContinuous(33);
+  lox2.startRangeContinuous(33);
 
   Serial.println(F("READY"));
 }
 
 void loop() {
-  VL53L0X_RangingMeasurementData_t measure1;
-  VL53L0X_RangingMeasurementData_t measure2;
+  // VL53L0X_RangingMeasurementData_t measure1;
+  // VL53L0X_RangingMeasurementData_t measure2;
 
-  int distance1 = -1;
-  int distance2 = -1;
+  // int distance1 = -1;
+  // int distance2 = -1;
 
-  // Read sensor 1
-  lox1.rangingTest(&measure1, false);
+  // // Read sensor 1
+  // lox1.rangingTest(&measure1, false);
+  uint16_t distance1 = lox1.readRange();
+  uint16_t distance2 = lox2.readRange();
 
-  if (measure1.RangeStatus != 4) {
-    distance1 = measure1.RangeMilliMeter;
-  }
+  // // if (measure1.RangeStatus != 4) {
+  // //   distance1 = measure1.RangeMilliMeter;
+  // // }
+  // distance1 = measure1.RangeMilliMeter;
 
   // Read sensor 2
-  lox2.rangingTest(&measure2, false);
+  // lox2.rangingTest(&measure2, false);
 
-  if (measure2.RangeStatus != 4) {
-    distance2 = measure2.RangeMilliMeter;
-  }
-
+  // if (measure2.RangeStatus != 4) {
+  //   distance2 = measure2.RangeMilliMeter;
+  // // }
+  // distance2 = measure2.RangeMilliMeter;
   // Stream both values on one line
   Serial.print(F("TOF1:"));
   Serial.print(distance1);
@@ -78,5 +87,5 @@ void loop() {
   Serial.print(F(",TOF2:"));
   Serial.println(distance2);
 
-  delay(50);
+  //delay(50);
 }
