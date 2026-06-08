@@ -8,3 +8,4 @@ pyqt5
 ahrs
 scipy
 matplotlib
+cv2
