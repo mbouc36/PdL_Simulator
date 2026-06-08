@@ -3,7 +3,7 @@ import serial
 from collections import deque
 import sys
 
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
 
 config = load_config()
@@ -126,8 +126,8 @@ while True:
     # raw1_str = f"{raw1:.2f}" if raw1 >= 0 else "OUT_OF_RANGE"
     # raw2_str = f"{raw2:.2f}" if raw2 >= 0 else "OUT_OF_RANGE"
 
-    corrected1_str = f"{corrected1:.2f}" if corrected1 is not None else "OUT_OF_RANGE"
-    corrected2_str = f"{corrected2:.2f}" if corrected2 is not None else "OUT_OF_RANGE"
+    corrected1_str = f"{corrected1:.2f}" if corrected1 is not None and corrected1 > 0 else "OUT_OF_RANGE"
+    corrected2_str = f"{corrected2:.2f}" if corrected2 is not None and corrected2 > 0 else "OUT_OF_RANGE"
 
     # avg1_str = f"{avg1:.2f}" if avg1 is not None else "OUT_OF_RANGE"
     # avg2_str = f"{avg2:.2f}" if avg2 is not None else "OUT_OF_RANGE"

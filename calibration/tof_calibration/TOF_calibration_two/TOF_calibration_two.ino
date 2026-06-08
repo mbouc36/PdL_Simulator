@@ -1,4 +1,4 @@
-%Ardiuno script to take 100 measuremnts at 10 known distances 
+//Ardiuno script to take 100 measuremnts at 10 known distances 
 
 #include <Wire.h>
 #include <Adafruit_VL53L0X.h>
@@ -6,8 +6,8 @@
 #define NUM_SAMPLES 100
 #define MAX_VALID_DISTANCE_MM 375
 
-#define XSHUT_1 2
-#define XSHUT_2 3
+#define XSHUT_1 6
+#define XSHUT_2 7
 
 #define TOF1_ADDR 0x30
 #define TOF2_ADDR 0x31
@@ -23,7 +23,7 @@ const int actualDistances[NUM_CAL_POINTS] = {
 };
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   Wire.begin();
 
   pinMode(XSHUT_1, OUTPUT);

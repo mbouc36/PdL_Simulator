@@ -3,9 +3,10 @@
 
 #include <Wire.h>
 #include <Adafruit_VL53L0X.h>
+//#include <vl53l0x-arduino.h>
 
-#define XSHUT_1 2
-#define XSHUT_2 3
+#define XSHUT_1 6
+#define XSHUT_2 7
 
 #define TOF1_ADDR 0x30
 #define TOF2_ADDR 0x31
