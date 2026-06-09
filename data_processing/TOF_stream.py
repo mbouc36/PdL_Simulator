@@ -51,7 +51,10 @@ def load_coefficients(path):
 
 
 def correct_distance(raw, c):
-    return (
+    if raw <= 0:
+        return None
+
+    distance = (
         c["a5"] * raw**5
         + c["a4"] * raw**4
         + c["a3"] * raw**3
@@ -59,6 +62,12 @@ def correct_distance(raw, c):
         + c["a1"] * raw
         + c["a0"]
     )
+
+    if distance <= 0:
+        return None
+    else: 
+        return distance
+
 
 
 def parse_tof_line(line):
@@ -82,54 +91,56 @@ def parse_tof_line(line):
         return None, None
 
 
-coeffs = load_coefficients(COEFF_FILE)
 
-window1 = deque(maxlen=WINDOW_SIZE)
-window2 = deque(maxlen=WINDOW_SIZE)
 
-ser = serial.Serial(PORT, BAUD, timeout=1)
 
-print("Testing dual VL53L0X coefficients")
-print("Corrected1_mm,  Corrected2_mm")
+if __name__ == "__main__":
+    coeffs = load_coefficients(COEFF_FILE)
 
-while True:
-    line = ser.readline().decode(errors="ignore").strip()
+    window1 = deque(maxlen=WINDOW_SIZE)
+    window2 = deque(maxlen=WINDOW_SIZE)
 
-    if not line:
-        continue
+    ser = serial.Serial(PORT, BAUD, timeout=1)
 
-    if line == "READY":
-        print("Arduino ready.")
-        continue
+    print("Testing dual VL53L0X coefficients")
+    print("Corrected1_mm,  Corrected2_mm")
 
-    raw1, raw2 = parse_tof_line(line)
+    while True:
+        line = ser.readline().decode(errors="ignore").strip()
 
-    if raw1 is None or raw2 is None:
-        print(line)
-        continue
+        if not line:
+            continue
 
-    corrected1 = None
-    corrected2 = None
-    avg1 = None
-    avg2 = None
+        if line == "READY":
+            print("Arduino ready.")
+            continue
 
-    if raw1 >= 0:
+        raw1, raw2 = parse_tof_line(line)
+
+        if raw1 is None or raw2 is None:
+            print(line)
+            continue
+
+        avg1 = None
+        avg2 = None
+
         corrected1 = correct_distance(raw1, coeffs["SENSOR_1"])
-        window1.append(corrected1)
-        avg1 = sum(window1) / len(window1)
+        # if corrected1 is not None:
+        #     window1.append(corrected1)
+        #     avg1 = sum(window1) / len(window1)
 
-    if raw2 >= 0:
         corrected2 = correct_distance(raw2, coeffs["SENSOR_2"])
-        window2.append(corrected2)
-        avg2 = sum(window2) / len(window2)
+        # if corrected2 is not None:
+        #     window2.append(corrected2)
+        #     avg2 = sum(window2) / len(window2)
 
-    # raw1_str = f"{raw1:.2f}" if raw1 >= 0 else "OUT_OF_RANGE"
-    # raw2_str = f"{raw2:.2f}" if raw2 >= 0 else "OUT_OF_RANGE"
+        # raw1_str = f"{raw1:.2f}" if raw1 >= 0 else "OUT_OF_RANGE"
+        # raw2_str = f"{raw2:.2f}" if raw2 >= 0 else "OUT_OF_RANGE"
 
-    corrected1_str = f"{corrected1:.2f}" if corrected1 is not None and corrected1 > 0 else "OUT_OF_RANGE"
-    corrected2_str = f"{corrected2:.2f}" if corrected2 is not None and corrected2 > 0 else "OUT_OF_RANGE"
+        corrected1_str = f"{corrected1:.2f}" if corrected1 is not None else "OUT_OF_RANGE"
+        corrected2_str = f"{corrected2:.2f}" if corrected2 is not None else "OUT_OF_RANGE"
 
-    # avg1_str = f"{avg1:.2f}" if avg1 is not None else "OUT_OF_RANGE"
-    # avg2_str = f"{avg2:.2f}" if avg2 is not None else "OUT_OF_RANGE"
+        # avg1_str = f"{avg1:.2f}" if avg1 is not None else "OUT_OF_RANGE"
+        # avg2_str = f"{avg2:.2f}" if avg2 is not None else "OUT_OF_RANGE"
 
-    print(f" {corrected1_str}" f" {corrected2_str}")
+        print(f" {corrected1_str}" f" {corrected2_str}")
