@@ -16,94 +16,110 @@ COEFF_FILE = os.path.join(PARENT_DIR, "../calibration/tof_calibration/coeff.txt"
 WINDOW_SIZE = 20
 
 
-def load_coefficients(path):
-    coeffs = {"SENSOR_1": {}, "SENSOR_2": {}}
-
-    current_sensor = None
-
-    with open(path, "r") as f:
-        for line in f:
-            line = line.strip()
-
-            if not line:
-                continue
-
-            if line == "SENSOR_1_COEFFICIENTS":
-                current_sensor = "SENSOR_1"
-                continue
-
-            if line == "SENSOR_2_COEFFICIENTS":
-                current_sensor = "SENSOR_2"
-                continue
-
-            if "=" in line and current_sensor is not None:
-                key, value = line.split("=")
-                coeffs[current_sensor][key.strip()] = float(value.strip())
-
-    required = ["a5", "a4", "a3", "a2", "a1", "a0"]
-
-    for sensor_name in ["SENSOR_1", "SENSOR_2"]:
-        for key in required:
-            if key not in coeffs[sensor_name]:
-                raise ValueError(f"Missing {key} for {sensor_name}")
-
-    return coeffs
-
-
-def correct_distance(raw, c):
-    if raw <= 0:
-        return None
-
-    distance = (
-        c["a5"] * raw**5
-        + c["a4"] * raw**4
-        + c["a3"] * raw**3
-        + c["a2"] * raw**2
-        + c["a1"] * raw
-        + c["a0"]
-    )
-
-    if distance <= 0:
-        return None
-    else: 
-        return distance
-
-
-
-def parse_tof_line(line):
+class TOFManager:
     """
-    Expected Arduino format:
-    TOF1:152,TOF2:149
+    This class manages two ToF sensors
     """
 
-    if not line.startswith("TOF1:"):
-        return None, None
+    def __init__(self, path=COEFF_FILE):
+        self.coeff = self.load_coefficients(path)
 
-    try:
-        parts = line.split(",")
+    def load_coefficients(self, path):
+        """
+        Load offset coeffecients from a specified file
+        """
+        coeffs = {"LEFT_SENSOR": {}, "RIGHT_SENSOR": {}}
 
-        raw1 = float(parts[0].replace("TOF1:", "").strip())
-        raw2 = float(parts[1].replace("TOF2:", "").strip())
+        current_sensor = None
 
-        return raw1, raw2
+        with open(path, "r") as f:
+            for line in f:
+                line = line.strip()
 
-    except Exception:
-        return None, None
+                if not line:
+                    continue
 
+                if line == "LEFT_SENSOR_COEFFICIENTS":
+                    current_sensor = "LEFT_SENSOR"
+                    continue
 
+                if line == "RIGHT_SENSOR_COEFFICIENTS":
+                    current_sensor = "RIGHT_SENSOR"
+                    continue
 
+                if "=" in line and current_sensor is not None:
+                    key, value = line.split("=")
+                    coeffs[current_sensor][key.strip()] = float(value.strip())
+
+        required = ["a5", "a4", "a3", "a2", "a1", "a0"]
+
+        for sensor_name in ["LEFT_SENSOR", "RIGHT_SENSOR"]:
+            for key in required:
+                if key not in coeffs[sensor_name]:
+                    raise ValueError(f"Missing {key} for {sensor_name}")
+
+        return coeffs
+
+    def correct_distance(self, raw_distance, coeff):
+        """
+        Pass a raw distance through coeffecients to yeild a
+        corrected distance
+        """
+        if raw_distance <= 0:
+            return None
+
+        distance = (
+            coeff["a5"] * raw_distance**5
+            + coeff["a4"] * raw_distance**4
+            + coeff["a3"] * raw_distance**3
+            + coeff["a2"] * raw_distance**2
+            + coeff["a1"] * raw_distance
+            + coeff["a0"]
+        )
+
+        if distance <= 0:
+            return None
+        else:
+            return distance
+
+    def parse_tof_line(self, line):
+        """
+        Expected Arduino format:
+        TOF1:152,TOF2:149 (TOF1 being left, and TOF2 being right)
+        152, 149 (first value indicates left distance, second value indicates right)
+
+        """
+
+        try:
+            parts = line.split(",")
+            if line.startswith("TOF1:"):
+                raw_left = float(parts[0].replace("TOF1:", "").strip())
+                raw_right = float(parts[1].replace("TOF2:", "").strip())
+            else:
+                raw_left = float(parts[0].strip())
+                raw_right = float(parts[1].strip())
+
+            return raw_left, raw_right
+
+        except Exception:
+            return None, None
+
+    def get_distances(self, line):
+        """
+        Get a valid distance value from a line
+        """
+
+        raw_left, raw_right = self.parse_tof_line(line)
+
+        corrected_left = self.correct_distance(raw_left, self.coeff["LEFT_SENSOR"])
+        corrected_right = self.correct_distance(raw_right, self.coeff["RIGHT_SENSOR"])
+
+        return corrected_left, corrected_right
 
 
 if __name__ == "__main__":
-    coeffs = load_coefficients(COEFF_FILE)
-
-    window1 = deque(maxlen=WINDOW_SIZE)
-    window2 = deque(maxlen=WINDOW_SIZE)
-
+    tof_manager = TOFManager()
     ser = serial.Serial(PORT, BAUD, timeout=1)
-
-    print("Testing dual VL53L0X coefficients")
-    print("Corrected1_mm,  Corrected2_mm")
 
     while True:
         line = ser.readline().decode(errors="ignore").strip()
@@ -111,36 +127,19 @@ if __name__ == "__main__":
         if not line:
             continue
 
-        if line == "READY":
-            print("Arduino ready.")
-            continue
+        raw_left, raw_right = tof_manager.parse_tof_line(line)
 
-        raw1, raw2 = parse_tof_line(line)
-
-        if raw1 is None or raw2 is None:
+        if raw_left is None or raw_right is None:
             print(line)
             continue
 
-        avg1 = None
-        avg2 = None
+        corrected_left, corrected_right = tof_manager.get_distances()
 
-        corrected1 = correct_distance(raw1, coeffs["SENSOR_1"])
-        # if corrected1 is not None:
-        #     window1.append(corrected1)
-        #     avg1 = sum(window1) / len(window1)
+        corrected_left_str = (
+            f"{corrected_left:.2f}" if corrected_left is not None else "OUT_OF_RANGE"
+        )
+        corrected_right_str = (
+            f"{corrected_right:.2f}" if corrected_right is not None else "OUT_OF_RANGE"
+        )
 
-        corrected2 = correct_distance(raw2, coeffs["SENSOR_2"])
-        # if corrected2 is not None:
-        #     window2.append(corrected2)
-        #     avg2 = sum(window2) / len(window2)
-
-        # raw1_str = f"{raw1:.2f}" if raw1 >= 0 else "OUT_OF_RANGE"
-        # raw2_str = f"{raw2:.2f}" if raw2 >= 0 else "OUT_OF_RANGE"
-
-        corrected1_str = f"{corrected1:.2f}" if corrected1 is not None else "OUT_OF_RANGE"
-        corrected2_str = f"{corrected2:.2f}" if corrected2 is not None else "OUT_OF_RANGE"
-
-        # avg1_str = f"{avg1:.2f}" if avg1 is not None else "OUT_OF_RANGE"
-        # avg2_str = f"{avg2:.2f}" if avg2 is not None else "OUT_OF_RANGE"
-
-        print(f" {corrected1_str}" f" {corrected2_str}")
+        print(f" {corrected_left_str}" f" {corrected_right_str}")

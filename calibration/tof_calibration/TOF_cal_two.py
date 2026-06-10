@@ -21,8 +21,8 @@ RAW_DATA_FILE = os.path.join(PARENT_DIR, "dual_tof_calibration_data.csv")
 POLY_DEGREE = 5
 
 actual = []
-sensor1_measured = []
-sensor2_measured = []
+left_sensor_measured = []
+right_sensor_measured = []
 
 ser = serial.Serial(PORT, BAUD, timeout=1)
 
@@ -55,52 +55,52 @@ while True:
             continue
 
         actual_mm = float(parts[1])
-        sensor1_mm = float(parts[2])
-        sensor2_mm = float(parts[3])
+        left_sensor_mm = float(parts[2])
+        right_sensor_mm = float(parts[3])
 
         actual.append(actual_mm)
-        sensor1_measured.append(sensor1_mm)
-        sensor2_measured.append(sensor2_mm)
+        left_sensor_measured.append(left_sensor_mm)
+        right_sensor_measured.append(right_sensor_mm)
 
 ser.close()
 
 actual = np.array(actual, dtype=float)
-sensor1_measured = np.array(sensor1_measured, dtype=float)
-sensor2_measured = np.array(sensor2_measured, dtype=float)
+left_sensor_measured = np.array(left_sensor_measured, dtype=float)
+right_sensor_measured = np.array(right_sensor_measured, dtype=float)
 
 if len(actual) < POLY_DEGREE + 1:
     raise ValueError("Not enough calibration points for a 5th-order polynomial fit.")
 
 # Fit: actual_distance = f(measured_distance)
-coeff1 = np.polyfit(sensor1_measured, actual, POLY_DEGREE)
-coeff2 = np.polyfit(sensor2_measured, actual, POLY_DEGREE)
+left_coeff = np.polyfit(left_sensor_measured, actual, POLY_DEGREE)
+right_coeff = np.polyfit(right_sensor_measured, actual, POLY_DEGREE)
 
 # np.polyfit returns highest power first:
 # [a5, a4, a3, a2, a1, a0]
-a5_1, a4_1, a3_1, a2_1, a1_1, a0_1 = coeff1
-a5_2, a4_2, a3_2, a2_2, a1_2, a0_2 = coeff2
+a5_left, a4_left, a3_left, a2_left, a1_left, a0_left = left_coeff
+a5_right, a4_right, a3_right, a2_right, a1_right, a0_right = right_coeff
 
 with open(RAW_DATA_FILE, "w") as f:
-    f.write("actual_mm,sensor1_measured_mm,sensor2_measured_mm\n")
-    for a, s1, s2 in zip(actual, sensor1_measured, sensor2_measured):
-        f.write(f"{a:.6f},{s1:.6f},{s2:.6f}\n")
+    f.write("actual_mm,left_measured_mm,right_measured_mm\n")
+    for a, s_left, s_right in zip(actual, left_sensor_measured, right_sensor_measured):
+        f.write(f"{a:.6f},{s_left:.6f},{s_right:.6f}\n")
 
 with open(OUTPUT_FILE, "w") as f:
-    f.write("SENSOR_1_COEFFICIENTS\n")
-    f.write(f"a5={a5_1:.12e}\n")
-    f.write(f"a4={a4_1:.12e}\n")
-    f.write(f"a3={a3_1:.12e}\n")
-    f.write(f"a2={a2_1:.12e}\n")
-    f.write(f"a1={a1_1:.12e}\n")
-    f.write(f"a0={a0_1:.12e}\n\n")
+    f.write("LEFT_SENSOR_COEFFICIENTS\n")
+    f.write(f"a5={a5_left:.12e}\n")
+    f.write(f"a4={a4_left:.12e}\n")
+    f.write(f"a3={a3_left:.12e}\n")
+    f.write(f"a2={a2_left:.12e}\n")
+    f.write(f"a1={a1_left:.12e}\n")
+    f.write(f"a0={a0_left:.12e}\n\n")
 
-    f.write("SENSOR_2_COEFFICIENTS\n")
-    f.write(f"a5={a5_2:.12e}\n")
-    f.write(f"a4={a4_2:.12e}\n")
-    f.write(f"a3={a3_2:.12e}\n")
-    f.write(f"a2={a2_2:.12e}\n")
-    f.write(f"a1={a1_2:.12e}\n")
-    f.write(f"a0={a0_2:.12e}\n")
+    f.write("RIGHT_SENSOR_COEFFICIENTS\n")
+    f.write(f"a5={a5_right:.12e}\n")
+    f.write(f"a4={a4_right:.12e}\n")
+    f.write(f"a3={a3_right:.12e}\n")
+    f.write(f"a2={a2_right:.12e}\n")
+    f.write(f"a1={a1_right:.12e}\n")
+    f.write(f"a0={a0_right:.12e}\n")
 
 print("\nCalibration complete.")
 print("Raw calibration data saved to:")
@@ -109,8 +109,8 @@ print(RAW_DATA_FILE)
 print("\nPolynomial coefficients saved to:")
 print(OUTPUT_FILE)
 
-print("\nSensor 1 coefficients:")
-print(coeff1)
+print("\nLeft sensor coefficients:")
+print(left_coeff)
 
-print("\nSensor 2 coefficients:")
-print(coeff2)
+print("\nRight sensor coefficients:")
+print(right_coeff)
