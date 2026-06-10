@@ -1,6 +1,7 @@
 import sys
 import os
 import cv2
+import serial
 import numpy as np
 
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
@@ -15,13 +16,27 @@ from PyQt5.QtWidgets import (
     QStackedWidget,
 )
 
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from update_config import load_config
+from data_processing.imu_angles import BodyRotationTracker
+from data_processing.TOF_stream import TOFManager
 
-FRAME_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../output_data/frame_data")
+config = load_config()
+
+SERIAL_PORT = config["serial_port"]
+BAUD_RATE = config["baud_rate"]
+
+
+FRAME_OUTPUT_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "../output_data/frame_data"
+)
 FRAME_FILENAME = "frames.txt"
-VIDEO_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../output_data/video")
+VIDEO_OUTPUT_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "../output_data/video"
+)
 
 frame_output_path = os.path.join(FRAME_OUTPUT_DIR, FRAME_FILENAME)
-video_output_path = os.path.join(VIDEO_OUTPUT_DIR, 'output.mp4')
+video_output_path = os.path.join(VIDEO_OUTPUT_DIR, "output.mp4")
 
 
 class DataThread(QThread):
@@ -30,6 +45,16 @@ class DataThread(QThread):
     def __init__(self):
         super().__init__()
         self.running = False
+
+        # init serial
+        try:
+            self.ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+        except Exception:
+            print(f"Failed to connect to port: {SERIAL_PORT}")
+            exit(1)
+
+    def write_to_csv():
+        pass
 
     def run(self):
         self.running = True
@@ -43,7 +68,19 @@ class DataThread(QThread):
         video_output = cv2.VideoWriter(
             video_output_path, fourcc, fps, (frame_width, frame_height)
         )
+
+        # Initialize the tracker
+        left_imu = BodyRotationTracker(name="left")
+        right_imu = BodyRotationTracker(name="right")
+
+        # Initialize tof manager
+        tof_manager = TOFManager()
+
+        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+
         while self.running:
+
+            # video
             ret, frame = cap.read()
             if not ret:
                 continue
@@ -57,8 +94,32 @@ class DataThread(QThread):
             # Write to video file
             video_output.write(frame)
 
+            # get sensor data
+            try:
+                line = ser.readline().decode("utf-8").strip()
+            except Exception as e:
+                print(e)
+                continue
+
+            values = line.split(",")
+
+            load_cell_values = values[:2] # First 2 values
+            tof_values = values[2:4] 
+            left_imu_values = values[5:14]
+            right_imu_values = values[14:] 
+
+            distances = tof_manager.get_distances(tof_values)
+            left_angles = left_imu.get_angles(left_imu_values)
+            right_angles = right_imu.get_angles(right_imu_values)
+            sensor_values = tuple(load_cell_values) + distances + left_angles + right_angles
+
+            # load to csv
+
+
+
         video_output.release()
         cap.release()
+
 
     def stop(self):
         self.running = False
@@ -99,7 +160,7 @@ class MainWindow(QWidget):
         start_btn.clicked.connect(self.show_video_page)
 
         layout.addStretch()
-        #layout.addWidget(title)
+        # layout.addWidget(title)
         layout.addWidget(start_btn)
         layout.addWidget(settings_btn)
         layout.addStretch()

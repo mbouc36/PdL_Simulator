@@ -133,7 +133,7 @@ if __name__ == "__main__":
             print(line)
             continue
 
-        corrected_left, corrected_right = tof_manager.get_distances()
+        corrected_left, corrected_right = tof_manager.get_distances(line)
 
         corrected_left_str = (
             f"{corrected_left:.2f}" if corrected_left is not None else "OUT_OF_RANGE"

@@ -5,3 +5,4 @@ __pycache__
 local_config.json
 output_data/frame_data/*
 output_data/video/*
+output_data/sensor_data/*
