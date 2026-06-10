@@ -161,9 +161,6 @@ def poll_serial_port():
     # Initialize the tracker
     tracker = BodyRotationTracker()
 
-    # Fetch calibration data from json
-    tracker.load_calibration_data()
-
     try:
         while True:
             try:
