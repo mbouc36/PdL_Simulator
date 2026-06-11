@@ -5,6 +5,9 @@
 #define DOUT_FRONT 3 
 #define CLK_FRONT 2
 
+#define INIT_NUM_RETRIES 10
+#define INIT_RETRY_DELAY 1000
+
 HX711 scale_front, scale_back;
 
 float calibration_factor = -2150.0;   // better starting point from your data
@@ -30,12 +33,12 @@ void setup() {
   scale_back.begin(DOUT_BACK, CLK_BACK);
 
 
-  if (!scale_front.is_ready()) {
+  if (!scale_front.wait_ready_retry(INIT_NUM_RETRIES, INIT_RETRY_DELAY)) {
     Serial.println("HX711 front not ready");
     while (1);
   }
 
-  if (!scale_back.is_ready()) {
+  if (!scale_back.wait_ready_retry(INIT_NUM_RETRIES, INIT_RETRY_DELAY)) {
     Serial.println("HX711 back not ready");
     while (1);
   }
