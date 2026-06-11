@@ -2,15 +2,18 @@
 #include <Wire.h>
 #include <LSM6.h>
 #include <LIS3MDL.h>
-#include <Adafruit_VL53L0X.h>
+#include <VL53L0X.h>
 
 unsigned long now;
 
 // Load Cell
 #define DOUT_BACK 5
 #define CLK_BACK 4
-#define DOUT_FRONT 3 
+#define DOUT_FRONT 3
 #define CLK_FRONT 2
+#define INIT_NUM_RETRIES 10
+#define INIT_RETRY_DELAY 1000
+
 HX711 scale_front, scale_back;
 
 float calibration_factor = -2150.0; 
@@ -33,8 +36,8 @@ const unsigned long IMU_PERIOD_MS = 5; // 200 Hz
 #define TOF1_ADDR 0x30
 #define TOF2_ADDR 0x31
 
-Adafruit_VL53L0X lox1 = Adafruit_VL53L0X();
-Adafruit_VL53L0X lox2 = Adafruit_VL53L0X();
+VL53L0X lox_left, lox_right;
+
 
 const unsigned long TOF_PERIOD_MS = 33; // 30 Hz
 unsigned long lastTOF = 0;
@@ -59,13 +62,14 @@ void calibrate_scale(HX711* scale){
 void setup() {
   Serial.begin(115200);
   Serial.println("Starting up");
+  Wire.begin();
 
   // IMU setup
-  Wire.begin();
   /*LSM6::device_auto, LSM6::sa0_low*/
   if (!imu6_left.init(LSM6::device_auto, LSM6::sa0_high)) {
     Serial.println("Failed to detect left LSM6!");
   }
+  imu6_left.enableDefault();
 
   if (!imu6_right.init()) {
     Serial.println("Failed to detect right LSM6!");
@@ -88,7 +92,10 @@ void setup() {
   imu_mag_right.enableDefault();
   imu6_right.writeReg(LSM6::CTRL2_G, (uint8_t) 0b01000010);
 
+  Serial.println("Completed IMU setup");
+
   /* TOF Setup */ 
+  Serial.println("Starting TOF setup");
   pinMode(XSHUT_1, OUTPUT);
   pinMode(XSHUT_2, OUTPUT);
 
@@ -101,51 +108,49 @@ void setup() {
   digitalWrite(XSHUT_1, HIGH);
   delay(10);
 
-  if (!lox1.begin(TOF1_ADDR)) {
-    Serial.println(F("ERROR_SENSOR1_NOT_FOUND"));
-    while (1);
+  lox_left.setTimeout(500);
+  if (!lox_left.init())
+  {
+    Serial.println("Failed to detect and initialize lox_left!");
+    while (1) {}
   }
+  lox_left.setAddress(TOF1_ADDR);
 
-  // Start sensor 2
+  // Start sensor 1
   digitalWrite(XSHUT_2, HIGH);
   delay(10);
 
-  if (!lox2.begin(TOF2_ADDR)) {
-    Serial.println(F("ERROR_SENSOR2_NOT_FOUND"));
-    while (1);
+  lox_right.setTimeout(500);
+  if (!lox_right.init())
+  {
+    Serial.println("Failed to detect and initialize lox_right!");
+    while (1) {}
   }
+  lox_right.setAddress(TOF2_ADDR);
 
-  // // High accuracy mode
-  // lox1.configSensor(Adafruit_VL53L0X::VL53L0X_SENSE_HIGH_ACCURACY);
-  // lox2.configSensor(Adafruit_VL53L0X::VL53L0X_SENSE_HIGH_ACCURACY);
-  lox1.setMeasurementTimingBudgetMicroSeconds(20000);
-  lox2.setMeasurementTimingBudgetMicroSeconds(20000);
-
-  lox1.startRangeContinuous(33);
-  lox2.startRangeContinuous(33);
+  lox_left.startContinuous();
+  lox_right.startContinuous();
+  Serial.println("Finished TOF setup");
 
   // Load Cell Setup
   scale_front.begin(DOUT_FRONT, CLK_FRONT);
-  scale_back.begin(DOUT_BACK, CLK_BACK);
-
-  if (!scale_front.is_ready()) {
+  if (!scale_front.wait_ready_retry(INIT_NUM_RETRIES, INIT_RETRY_DELAY)) {
     Serial.println("HX711 front not ready");
     while (1);
   }
 
-  if (!scale_back.is_ready()) {
+  scale_back.begin(DOUT_BACK, CLK_BACK);
+  if (!scale_back.wait_ready_retry(INIT_NUM_RETRIES, INIT_RETRY_DELAY)) {
     Serial.println("HX711 back not ready");
     while (1);
   }
-
-  Serial.println("Calibrate front scale");
-  delay(3000);
-  calibrate_scale(&scale_front);
-
   Serial.println("Calibrate back scale");
   delay(3000);
   calibrate_scale(&scale_back);
 
+  Serial.println("Calibrate front scale");
+  delay(3000);
+  calibrate_scale(&scale_front);
 
 }
 
@@ -168,17 +173,17 @@ void loop() {
 
   if (now - lastTOF >= TOF_PERIOD_MS) {
       lastTOF = now;
-      distance1 = lox1.readRange();
-      distance2 = lox2.readRange();
+      distance1 = lox_left.readRangeContinuousMillimeters();
+      distance2 = lox_right.readRangeContinuousMillimeters();
   }
 
   // Load Cell Prints
   Serial.print(grams_front, 2); Serial.print(", ");
-  Serial.print(grams_back, 2);
+  Serial.print(grams_back, 2); Serial.print(", ");
 
   // TOF Prints
-  Serial.print(distance1);
-  Serial.print(distance2);
+  Serial.print(distance1); Serial.print(", ");
+  Serial.print(distance2); Serial.print(", ");
 
   // Left IMU
   Serial.print(imu6_left.a.y); Serial.print(",");
