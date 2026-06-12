@@ -4,7 +4,11 @@
 #include <LIS3MDL.h>
 #include <VL53L0X.h>
 
+
+#define FREQUENCY 30
 unsigned long now;
+unsigned long last_print;
+const unsigned long period_ms = 1000/FREQUENCY;
 
 // Load Cell
 #define DOUT_BACK 5
@@ -17,17 +21,12 @@ unsigned long now;
 HX711 scale_front, scale_back;
 
 float calibration_factor = -2150.0; 
-unsigned long lastLoadCell = 0;
-const unsigned long HX711_PERIOD_MS = 100; // 10 Hz
-float grams_front, grams_back;
 
 // IMU 
 LSM6 imu6_left, imu6_right;
 LIS3MDL imu_mag_left, imu_mag_right;
 
 float sensitivity = 4.375/ 1000;
-unsigned long lastIMU = 0;
-const unsigned long IMU_PERIOD_MS = 5; // 200 Hz
 
 // TOF
 #define XSHUT_1 6
@@ -38,11 +37,6 @@ const unsigned long IMU_PERIOD_MS = 5; // 200 Hz
 
 VL53L0X lox_left, lox_right;
 
-
-const unsigned long TOF_PERIOD_MS = 33; // 30 Hz
-unsigned long lastTOF = 0;
-uint16_t distance1;
-uint16_t distance2;
 
 void calibrate_scale(HX711* scale){
   Serial.println("Remove all load");
@@ -151,61 +145,52 @@ void setup() {
   Serial.println("Calibrate front scale");
   delay(3000);
   calibrate_scale(&scale_front);
-
+  Serial.print("Ready");
 }
 
 void loop() {
   now = millis();
 
-  if (now - lastIMU >= IMU_PERIOD_MS) {
-      lastIMU = now;
-      imu6_left.read();
-      imu_mag_left.read();
-      imu6_right.read();
-      imu_mag_right.read();
+  if (now - last_print >= period_ms) {
+    last_print = now;
+    imu6_left.read();
+    imu_mag_left.read();
+    imu6_right.read();
+    imu_mag_right.read();
+
+    // Time
+    Serial.print(now); Serial.print(", ");
+
+    // Load Cell Prints
+    Serial.print(scale_front.get_units(1), 2); Serial.print(", ");
+    Serial.print(scale_back.get_units(1), 2); Serial.print(", ");
+
+    // TOF Prints
+    Serial.print(lox_left.readRangeContinuousMillimeters()); Serial.print(", ");
+    Serial.print(lox_right.readRangeContinuousMillimeters()); Serial.print(", ");
+
+    // Left IMU
+    Serial.print(imu6_left.a.y); Serial.print(", ");
+    Serial.print(imu6_left.a.z); Serial.print(", ");
+    Serial.print(imu6_left.g.x * sensitivity); Serial.print(", ");
+    Serial.print(imu6_left.g.y * sensitivity); Serial.print(", ");
+    Serial.print(imu6_left.g.z * sensitivity); Serial.print(", ");
+    Serial.print(imu_mag_left.m.x); Serial.print(", ");
+    Serial.print(imu_mag_left.m.y); Serial.print(", ");
+    Serial.print(imu_mag_left.m.z);
+
+    // Right IMU
+    Serial.print(imu6_right.a.x); Serial.print(", ");
+    Serial.print(imu6_right.a.y); Serial.print(", ");
+    Serial.print(imu6_right.a.z); Serial.print(", ");
+    Serial.print(imu6_right.g.x * sensitivity); Serial.print(", ");
+    Serial.print(imu6_right.g.y * sensitivity); Serial.print(", ");
+    Serial.print(imu6_right.g.z * sensitivity); Serial.print(", ");
+    Serial.print(imu_mag_right.m.x); Serial.print(", ");
+    Serial.print(imu_mag_right.m.y); Serial.print(", ");
+    Serial.print(imu_mag_right.m.z);
+
+    Serial.println("");
   }
-
-  if (now - lastLoadCell >= HX711_PERIOD_MS) {
-      lastLoadCell = now;
-      grams_front  = scale_front.get_units(1);   
-      grams_back  = scale_back.get_units(1);  
-  }
-
-  if (now - lastTOF >= TOF_PERIOD_MS) {
-      lastTOF = now;
-      distance1 = lox_left.readRangeContinuousMillimeters();
-      distance2 = lox_right.readRangeContinuousMillimeters();
-  }
-
-  // Load Cell Prints
-  Serial.print(grams_front, 2); Serial.print(", ");
-  Serial.print(grams_back, 2); Serial.print(", ");
-
-  // TOF Prints
-  Serial.print(distance1); Serial.print(", ");
-  Serial.print(distance2); Serial.print(", ");
-
-  // Left IMU
-  Serial.print(imu6_left.a.y); Serial.print(",");
-  Serial.print(imu6_left.a.z); Serial.print(",");
-  Serial.print(imu6_left.g.x * sensitivity); Serial.print(",");
-  Serial.print(imu6_left.g.y * sensitivity); Serial.print(",");
-  Serial.print(imu6_left.g.z * sensitivity); Serial.print(",");
-  Serial.print(imu_mag_left.m.x); Serial.print(",");
-  Serial.print(imu_mag_left.m.y); Serial.print(",");
-  Serial.print(imu_mag_left.m.z);
-
-  // Right IMU
-  Serial.print(imu6_right.a.x); Serial.print(",");
-  Serial.print(imu6_right.a.y); Serial.print(",");
-  Serial.print(imu6_right.a.z); Serial.print(",");
-  Serial.print(imu6_right.g.x * sensitivity); Serial.print(",");
-  Serial.print(imu6_right.g.y * sensitivity); Serial.print(",");
-  Serial.print(imu6_right.g.z * sensitivity); Serial.print(",");
-  Serial.print(imu_mag_right.m.x); Serial.print(",");
-  Serial.print(imu_mag_right.m.y); Serial.print(",");
-  Serial.print(imu_mag_right.m.z);
-
-  Serial.println("");
 
 }
