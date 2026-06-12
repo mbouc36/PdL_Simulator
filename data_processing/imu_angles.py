@@ -63,11 +63,11 @@ class BodyRotationTracker:
             exit(1)
 
 
-        self.accOffset = data["self.accOffset"]
-        self.accScale = data["self.accScale"]
-        self.gOffset = data["self.gOffset"]
-        self.magOffset = data["self.magOffset"]
-        self.magScale = data["self.magScale"]
+        self.accOffset = data["accOffset"]
+        self.accScale = data["accScale"]
+        self.gOffset = data["gOffset"]
+        self.magOffset = data["magOffset"]
+        self.magScale = data["magScale"]
 
     def get_imu_data(self, values):
         """
@@ -128,7 +128,10 @@ class BodyRotationTracker:
         return self.body_x_deg, self.body_y_deg, self.body_z_deg
 
     def get_angles(self, line):
-        values = line.split(",")
+        if type(line) == str:
+            values = line.split(",")
+        else:
+            values = line
 
         if len(values) != 9:
             return
@@ -140,11 +143,6 @@ class BodyRotationTracker:
         angles = self.update(gyro, accel, mag)
 
         # 3. Print or use your perfectly drift-corrected body-frame rotation
-        # self.body_x_deg, self.body_y_deg, self.body_z_deg
-        msg = f"{angles[0].item():.4f}, {angles[1].item():.4f}, {angles[2].item():.4f}"
-        sock.sendto(msg.encode("utf-8"), (UDP_IP, UDP_PORT))
-        print(msg)
-
         return angles
 
 
@@ -169,7 +167,10 @@ def poll_serial_port():
                 print(e)
                 continue
 
-            tracker.get_angles(line)
+            angles = tracker.get_angles(line)
+            msg = f"{angles[0].item():.4f}, {angles[1].item():.4f}, {angles[2].item():.4f}"
+            sock.sendto(msg.encode("utf-8"), (UDP_IP, UDP_PORT))
+            print(msg)
 
     except KeyboardInterrupt:
         print("\nTracking stopped.")

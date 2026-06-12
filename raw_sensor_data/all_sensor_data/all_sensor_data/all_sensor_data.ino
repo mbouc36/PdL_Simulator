@@ -170,6 +170,7 @@ void loop() {
     Serial.print(lox_right.readRangeContinuousMillimeters()); Serial.print(", ");
 
     // Left IMU
+    Serial.print(imu6_left.a.x); Serial.print(", ");
     Serial.print(imu6_left.a.y); Serial.print(", ");
     Serial.print(imu6_left.a.z); Serial.print(", ");
     Serial.print(imu6_left.g.x * sensitivity); Serial.print(", ");
@@ -177,7 +178,7 @@ void loop() {
     Serial.print(imu6_left.g.z * sensitivity); Serial.print(", ");
     Serial.print(imu_mag_left.m.x); Serial.print(", ");
     Serial.print(imu_mag_left.m.y); Serial.print(", ");
-    Serial.print(imu_mag_left.m.z);
+    Serial.print(imu_mag_left.m.z); Serial.print(", ");
 
     // Right IMU
     Serial.print(imu6_right.a.x); Serial.print(", ");

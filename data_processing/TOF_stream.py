@@ -65,7 +65,7 @@ class TOFManager:
         Pass a raw distance through coeffecients to yeild a
         corrected distance
         """
-        if raw_distance <= 0:
+        if raw_distance is None or raw_distance <= 0:
             return None
 
         distance = (
@@ -91,17 +91,23 @@ class TOFManager:
         """
 
         try:
-            parts = line.split(",")
-            if line.startswith("TOF1:"):
-                raw_left = float(parts[0].replace("TOF1:", "").strip())
-                raw_right = float(parts[1].replace("TOF2:", "").strip())
-            else:
-                raw_left = float(parts[0].strip())
-                raw_right = float(parts[1].strip())
+            if type(line) == list:
+                raw_left = float(line[0])
+                raw_right = float(line[1])
+            
+            elif type(line) ==  str:
+                parts = line.split(",")
+                if line.startswith("TOF1:"):
+                    raw_left = float(parts[0].replace("TOF1:", "").strip())
+                    raw_right = float(parts[1].replace("TOF2:", "").strip())
+                else:
+                    raw_left = float(parts[0].strip())
+                    raw_right = float(parts[1].strip())
 
             return raw_left, raw_right
 
-        except Exception:
+        except Exception as e:
+            print(e)
             return None, None
 
     def get_distances(self, line):

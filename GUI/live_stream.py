@@ -1,6 +1,8 @@
 import sys
 import os
 import cv2
+import csv
+import time
 import serial
 import numpy as np
 
@@ -12,7 +14,6 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QLabel,
     QVBoxLayout,
-    QHBoxLayout,
     QStackedWidget,
 )
 
@@ -35,16 +36,23 @@ VIDEO_OUTPUT_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "../output_data/video"
 )
 
+SENSOR_OUTPUT_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "../output_data/sensor_data"
+)
+
 frame_output_path = os.path.join(FRAME_OUTPUT_DIR, FRAME_FILENAME)
 video_output_path = os.path.join(VIDEO_OUTPUT_DIR, "output.mp4")
+
 
 
 class DataThread(QThread):
     frame_ready = pyqtSignal(object)
 
-    def __init__(self):
+    def __init__(self, filename):
         super().__init__()
         self.running = False
+        self.filename = os.path.join(SENSOR_OUTPUT_DIR, filename + ".csv")
+        self.frame_idx = 0
 
         # init serial
         try:
@@ -53,8 +61,27 @@ class DataThread(QThread):
             print(f"Failed to connect to port: {SERIAL_PORT}")
             exit(1)
 
-    def write_to_csv():
-        pass
+    def write_frames_txt(self, frame, time):
+        try:
+            with open(frame_output_path, "a", encoding="utf-8") as file:
+                # store simple image features, not full pixels
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                mean_intensity = np.mean(gray)
+                std_intensity = np.std(gray)
+                row = [self.frame_idx, time, mean_intensity, std_intensity]
+                file.write(" ".join(map(str, row)) + "\n")
+                self.frame_idx += 1
+        except Exception as e:
+            print(f"Failed to write frame to txt: {e}")
+
+
+    def write_to_csv(self, serial_values):
+        try:
+            with open(self.filename, mode='a', newline='', encoding='utf-8') as file:
+                writer = csv.writer(file)
+                writer.writerow(serial_values)
+        except Exception as e:
+            print(f"Failed to writ sensr data to csv: {e}")
 
     def run(self):
         self.running = True
@@ -79,43 +106,48 @@ class DataThread(QThread):
         ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
 
         while self.running:
+            # Synchronize everything with serial prints
+            try: 
+                line = ser.readline().decode("utf-8").strip() # wait till new line
+            except Exception as e:
+                print(e)
+                continue
 
-            # video
+            if not line:
+                continue
+
             ret, frame = cap.read()
             if not ret:
                 continue
 
             self.frame_ready.emit(frame)
 
-            # Write to txt file
-            with open(frame_output_path, "a", encoding="utf-8") as file:
-                file.write(np.array_str(frame))
-
             # Write to video file
             video_output.write(frame)
 
-            # get sensor data
-            try:
-                line = ser.readline().decode("utf-8").strip()
-            except Exception as e:
-                print(e)
+            serial_values = line.split(",")
+            if len(serial_values) != 23:
+                print("Invalid line")
                 continue
 
-            values = line.split(",")
+            arduino_time = serial_values[0]
+            load_cell_values = serial_values[1:3]
+            tof_values = serial_values[3:5] 
+            left_imu_values = serial_values[5:14]
+            right_imu_values = serial_values[14:] 
 
-            load_cell_values = values[:2] # First 2 values
-            tof_values = values[2:4] 
-            left_imu_values = values[5:14]
-            right_imu_values = values[14:] 
+            # Write to txt file
+            self.write_frames_txt(frame, arduino_time)
 
-            distances = tof_manager.get_distances(tof_values)
-            left_angles = left_imu.get_angles(left_imu_values)
-            right_angles = right_imu.get_angles(right_imu_values)
-            sensor_values = tuple(load_cell_values) + distances + left_angles + right_angles
+            distances = list(tof_manager.get_distances(tof_values))
+            print(distances)
+            left_angles = list(left_imu.get_angles(left_imu_values))
+            right_angles = list(right_imu.get_angles(right_imu_values))
+            # Ensure all values are the same format
+            sensor_values = [arduino_time] + list(load_cell_values) + distances + left_angles + right_angles
 
             # load to csv
-
-
+            self.write_to_csv(sensor_values)
 
         video_output.release()
         cap.release()
@@ -197,7 +229,7 @@ class MainWindow(QWidget):
         if self.video_thread is not None:
             return
 
-        self.video_thread = DataThread()
+        self.video_thread = DataThread("frames")
         self.video_thread.frame_ready.connect(self.update_video_frame)
         self.video_thread.start()
 
