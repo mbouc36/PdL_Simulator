@@ -133,14 +133,13 @@ class DataThread(QThread):
             arduino_time = serial_values[0]
             load_cell_values = serial_values[1:3]
             tof_values = serial_values[3:5] 
-            left_imu_values = serial_values[5:14]
-            right_imu_values = serial_values[14:] 
+            left_imu_values = arduino_time + serial_values[5:14]
+            right_imu_values = arduino_time + serial_values[14:] 
 
             # Write to txt file
             self.write_frames_txt(frame, arduino_time)
 
             distances = list(tof_manager.get_distances(tof_values))
-            print(distances)
             left_angles = list(left_imu.get_angles(left_imu_values))
             right_angles = list(right_imu.get_angles(right_imu_values))
             # Ensure all values are the same format
