@@ -31,8 +31,8 @@ UDP_PORT = 5005
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 
-class IsolatedBodyAxisTracker:
-    def __init__(self):
+class BodyRotationTracker:
+    def __init__(self, name="left", config_file=CONFIG_FILENAME):
         self.filter = Madgwick(sample_period=1 / FREQUENCY, gain=GAIN)
         self.q_prev = np.array([1.0, 0.0, 0.0, 0.0])
 
@@ -46,21 +46,28 @@ class IsolatedBodyAxisTracker:
         self.gOffset = None
         self.magOffset = None
         self.magScale = None
+        self.name = name
+        self.load_calibration_data(config_file)
 
-    def load_calibration_data(self, name="left", filename=CONFIG_FILENAME):
+    def load_calibration_data(self, file):
         """
         Read data from filename for IMU offset and scale data
         """
-        with open(filename, "r", encoding="utf-8") as f:
+        with open(file, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        data = data[name]
+        try:
+            data = data[self.name]
+        except:
+            print(f"Failed to find name: {self.name} in {file}")
+            exit(1)
 
-        self.accOffset = data["self.accOffset"]
-        self.accScale = data["self.accScale"]
-        self.gOffset = data["self.gOffset"]
-        self.magOffset = data["self.magOffset"]
-        self.magScale = data["self.magScale"]
+
+        self.accOffset = data["accOffset"]
+        self.accScale = data["accScale"]
+        self.gOffset = data["gOffset"]
+        self.magOffset = data["magOffset"]
+        self.magScale = data["magScale"]
 
     def get_imu_data(self, values):
         """
@@ -121,7 +128,10 @@ class IsolatedBodyAxisTracker:
         return self.body_x_deg, self.body_y_deg, self.body_z_deg
 
     def get_angles(self, line):
-        values = line.split(",")
+        if type(line) == str:
+            values = line.split(",")
+        else:
+            values = line
 
         if len(values) != 9:
             return
@@ -133,15 +143,13 @@ class IsolatedBodyAxisTracker:
         angles = self.update(gyro, accel, mag)
 
         # 3. Print or use your perfectly drift-corrected body-frame rotation
-        # self.body_x_deg, self.body_y_deg, self.body_z_deg
-        msg = f"{angles[0].item():.4f}, {angles[1].item():.4f}, {angles[2].item():.4f}"
-        sock.sendto(msg.encode("utf-8"), (UDP_IP, UDP_PORT))
-        print(msg)
-
         return angles
 
 
-def get_x_y_z_angles():
+def poll_serial_port():
+    """
+    Function which reads serial port and prints angles
+    """
     try:
         ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
     except Exception:
@@ -149,10 +157,7 @@ def get_x_y_z_angles():
         exit(1)
 
     # Initialize the tracker
-    tracker = IsolatedBodyAxisTracker()
-
-    # Fetch calibration data from json
-    tracker.load_calibration_data()
+    tracker = BodyRotationTracker()
 
     try:
         while True:
@@ -162,11 +167,14 @@ def get_x_y_z_angles():
                 print(e)
                 continue
 
-            tracker.get_angles(line)
+            angles = tracker.get_angles(line)
+            msg = f"{angles[0].item():.4f}, {angles[1].item():.4f}, {angles[2].item():.4f}"
+            sock.sendto(msg.encode("utf-8"), (UDP_IP, UDP_PORT))
+            print(msg)
 
     except KeyboardInterrupt:
         print("\nTracking stopped.")
 
 
 if __name__ == "__main__":
-    get_x_y_z_angles()
+    poll_serial_port()
