@@ -2,10 +2,9 @@ import sys
 import os
 import cv2
 import csv
-import time
 import serial
-import numpy as np
 
+import argparse
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (
@@ -15,6 +14,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QVBoxLayout,
     QStackedWidget,
+    QStackedLayout,
 )
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -61,19 +61,6 @@ class DataThread(QThread):
             print(f"Failed to connect to port: {SERIAL_PORT}")
             exit(1)
 
-    def write_frames_txt(self, frame, time):
-        try:
-            with open(frame_output_path, "a", encoding="utf-8") as file:
-                # store simple image features, not full pixels
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                mean_intensity = np.mean(gray)
-                std_intensity = np.std(gray)
-                row = [self.frame_idx, time, mean_intensity, std_intensity]
-                file.write(" ".join(map(str, row)) + "\n")
-                self.frame_idx += 1
-        except Exception as e:
-            print(f"Failed to write frame to txt: {e}")
-
 
     def write_to_csv(self, serial_values):
         try:
@@ -104,7 +91,7 @@ class DataThread(QThread):
         tof_manager = TOFManager()
 
         ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-
+        print("hello")
         while self.running:
             # Synchronize everything with serial prints
             try: 
@@ -158,7 +145,7 @@ class DataThread(QThread):
 
 
 class MainWindow(QWidget):
-    def __init__(self):
+    def __init__(self, test_mode=False):
         super().__init__()
 
         self.setWindowTitle("GUI with Livestream")
@@ -172,28 +159,66 @@ class MainWindow(QWidget):
 
         main_layout = QVBoxLayout()
         main_layout.addWidget(self.pages)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
         self.setLayout(main_layout)
+        self.test_mode = test_mode
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #FFFFF0;
+            }
+        """)
 
     def create_start_page(self):
         start_page = QWidget()
         layout = QVBoxLayout()
 
-        # title = QLabel("Welcome")
-        # title.setAlignment(Qt.AlignCenter)
-        # title.setStyleSheet("font-size: 32px;")
+        title = QLabel("Laparoscopic Simulator")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("""
+            font-size: 48px;
+            font-weight: bold;
+            color: black;
+            font-family:  "Times New Roman", Times, serif;
+            margin-top: 48px;
+            margin-bottom: 48px;
+        """)
 
         start_btn = QPushButton("Start")
         settings_btn = QPushButton("Settings")
 
         for btn in [start_btn, settings_btn]:
             btn.setFixedHeight(50)
+            btn.setMinimumWidth(250)
+            btn.setMaximumWidth(400)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #FFFFF0;
+                    color: black;
+                    border: 1px solid #D8D0C0;   /* Thin warm gray outline */
+                    border-radius: 12px;
+                    padding: 10px;
+                    font-size: 16px;
+                    font-family:  "Times New Roman", Times, serif;
+                }
+
+                QPushButton:hover {
+                    background-color: #FAF0E6;
+                    border: 1px solid #C8C0B0;
+                }
+
+                QPushButton:pressed {
+                    background-color: #FDF6E3;
+                    border: 1px solid #B8B0A0;
+                }
+            """)
 
         start_btn.clicked.connect(self.show_video_page)
 
         layout.addStretch()
-        # layout.addWidget(title)
-        layout.addWidget(start_btn)
-        layout.addWidget(settings_btn)
+        layout.addWidget(title)
+        layout.addWidget(start_btn, alignment=Qt.AlignCenter)
+        layout.addWidget(settings_btn, alignment=Qt.AlignCenter)
         layout.addStretch()
 
         start_page.setLayout(layout)
@@ -201,28 +226,58 @@ class MainWindow(QWidget):
 
     def create_video_page(self):
         video_page = QWidget()
-        layout = QVBoxLayout()
+        video_page.setStyleSheet("background-color: black;")
+
+        stack_layout = QStackedLayout(video_page)
+        stack_layout.setContentsMargins(0, 0, 0, 0)
+        stack_layout.setSpacing(0)
+        stack_layout.setStackingMode(QStackedLayout.StackAll)
 
         self.video_label = QLabel("Video not started")
         self.video_label.setAlignment(Qt.AlignCenter)
-        self.video_label.setFixedSize(640, 480)
         self.video_label.setStyleSheet("background-color: black; color: white;")
+        self.video_label.setScaledContents(True)
+
+        overlay = QWidget()
+        overlay.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        overlay.setStyleSheet("background: transparent;")
+
+        overlay_layout = QVBoxLayout(overlay)
+        overlay_layout.setContentsMargins(20, 20, 20, 20)
+        overlay_layout.setSpacing(0)
 
         exit_btn = QPushButton("Exit")
-        exit_btn.setFixedHeight(50)
+        exit_btn.setFixedSize(120, 50)
         exit_btn.clicked.connect(self.close)
 
-        layout.addStretch()
-        layout.addWidget(self.video_label, alignment=Qt.AlignCenter)
-        layout.addWidget(exit_btn)
-        layout.addStretch()
+        exit_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FFFFF0;
+                color: black;
+                border: 1px solid #D8D0C0;
+                border-radius: 12px;
+                font-size: 16px;
+                font-family: "Times New Roman";
+            }
+        """)
 
-        video_page.setLayout(layout)
+        overlay_layout.addWidget(exit_btn, alignment=Qt.AlignTop | Qt.AlignRight)
+        overlay_layout.addStretch()
+
+        stack_layout.addWidget(self.video_label)
+        stack_layout.addWidget(overlay)
+
+        # Important: make overlay the top/current widget
+        stack_layout.setCurrentWidget(overlay)
+
         self.pages.addWidget(video_page)
 
     def show_video_page(self):
         self.pages.setCurrentIndex(1)
-        self.start_video()
+        if not self.test_mode:
+            self.start_video()
+        else:
+            pass
 
     def start_video(self):
         if self.video_thread is not None:
@@ -257,7 +312,12 @@ class MainWindow(QWidget):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="A script which loads the gui and parses data from the camera and arduino sensors")
+    parser.add_argument('--test', action='store_true', help='Run GUI without sensors and camera')
+
+    args = parser.parse_args()
+
     app = QApplication(sys.argv)
-    window = MainWindow()
+    window = MainWindow(test_mode=args.test)
     window.show()
     sys.exit(app.exec())
