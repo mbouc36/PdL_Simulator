@@ -10,14 +10,11 @@ float sensitivity = 4.375/ 1000;
 void setup() {
   Serial.begin(115200);
   Wire.begin();
-
-  Serial.println("Settig upt left IMU");
   /*LSM6::device_auto, LSM6::sa0_low*/
-  if (!imu6_left.init(LSM6::device_auto, LSM6::sa0_high)) {
+  if (!imu6_left.init(LSM6::device_auto, LSM6::sa0_low)) {
     Serial.println("Failed to detect left LSM6!");
     while (1);
   }
-  Serial.println("Finished setting up left gyro");
   imu6_left.enableDefault(); 
 
 
@@ -27,7 +24,7 @@ void setup() {
   }
   imu6_right.enableDefault(); 
 
-  if (!imu_mag_left.init(LIS3MDL::device_auto, LIS3MDL::sa1_high)) {
+  if (!imu_mag_left.init(LIS3MDL::device_auto, LIS3MDL::sa1_low)) {
     Serial.println("Failed to detect left LIS3MDL!");
     while (1);
   }
@@ -49,6 +46,7 @@ void loop() {
   imu6_right.read();
   imu_mag_right.read();
 
+  Serial.print(millis()); Serial.print(",");
   Serial.print(imu6_left.a.x); Serial.print(",");
   Serial.print(imu6_left.a.y); Serial.print(",");
   Serial.print(imu6_left.a.z); Serial.print(",");

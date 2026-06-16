@@ -10,6 +10,7 @@ import os
 import sys
 
 GAUSS_TO_MILLI_TESLA_CONVERSION = 10
+MILLISECOND_TO_SECOND_CONVERSION = 1000
 CONFIG_FILENAME = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "../calibration/imu_calibration/cal_data.json",
@@ -22,8 +23,8 @@ config = load_config()
 
 SERIAL_PORT = config["serial_port"]
 BAUD_RATE = config["baud_rate"]
-FREQUENCY = 200.0
-GAIN = 0.033
+FREQUENCY = 180.0
+GAIN = 0.2
 
 # UDP Info
 UDP_IP = "127.0.0.1"
@@ -33,7 +34,7 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 class BodyRotationTracker:
     def __init__(self, name="left", config_file=CONFIG_FILENAME):
-        self.filter = Madgwick(sample_period=1 / FREQUENCY, gain=GAIN)
+        self.filter = Madgwick( gain=GAIN)
         self.q_prev = np.array([1.0, 0.0, 0.0, 0.0])
 
         # Three completely independent accumulated body-frame angles
@@ -48,6 +49,7 @@ class BodyRotationTracker:
         self.magScale = None
         self.name = name
         self.load_calibration_data(config_file)
+        self.last_time = 0
 
     def load_calibration_data(self, file):
         """
@@ -73,7 +75,7 @@ class BodyRotationTracker:
         """
         Read Raw Sensor Data and use calibrated values
         """
-        ax, ay, az, gx, gy, gz, mx, my, mz = map(float, values)
+        time, ax, ay, az, gx, gy, gz, mx, my, mz = map(float, values)
 
         axCal = (ax - self.accOffset["x"]) * self.accScale["x"]
         ayCal = (ay - self.accOffset["y"]) * self.accScale["y"]
@@ -97,11 +99,14 @@ class BodyRotationTracker:
         acc_data = np.array([axCal, ayCal, azCal])
         mag_data = np.array([mxCal, myCal, mzCal])
 
-        return gyro_data, acc_data, mag_data
+        dt = (time - self.last_time)/MILLISECOND_TO_SECOND_CONVERSION
+        self.last_time = time
 
-    def update(self, gyro, accel, mag):
+        return dt, gyro_data, acc_data, mag_data
+
+    def update(self, dt, gyro, accel, mag):
         # 1. Get the global, drift-corrected quaternion from Madgwick
-        q_curr = self.filter.updateMARG(self.q_prev, gyr=gyro, acc=accel, mag=mag)
+        q_curr = self.filter.updateMARG(self.q_prev, gyr=gyro, acc=accel, mag=mag, dt=dt)
 
         # 2. Isolate the movement strictly to the local body frame
         q_prev_inv = np.array(
@@ -133,14 +138,15 @@ class BodyRotationTracker:
         else:
             values = line
 
-        if len(values) != 9:
+        if len(values) != 10:
+            print("Incorrect number of variables passed")
             return
 
         # 1. Grab the fresh data from the IMU
-        gyro, accel, mag = self.get_imu_data(values)
+        dt, gyro, accel, mag = self.get_imu_data(values)
 
         # 2. Feed the vectors into the filter and get the delta-calculated Z angle
-        angles = self.update(gyro, accel, mag)
+        angles = self.update(dt, gyro, accel, mag)
 
         # 3. Print or use your perfectly drift-corrected body-frame rotation
         return angles
@@ -164,10 +170,14 @@ def poll_serial_port():
             try:
                 line = ser.readline().decode("utf-8").strip()
             except Exception as e:
-                print(e)
+                print(f"Failed to read line: {e}")
                 continue
 
             angles = tracker.get_angles(line)
+            if angles is None:
+                print("Failed to retrived angles")
+                continue
+            
             msg = f"{angles[0].item():.4f}, {angles[1].item():.4f}, {angles[2].item():.4f}"
             sock.sendto(msg.encode("utf-8"), (UDP_IP, UDP_PORT))
             print(msg)
