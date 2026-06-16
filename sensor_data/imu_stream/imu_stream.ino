@@ -6,7 +6,6 @@ LSM6 imu6;
 LIS3MDL imu_mag;
 
 float sensitivity = 4.375/ 1000;
-unsigned long now;
 unsigned long last_print = 0;
 unsigned long dt;
 
@@ -36,7 +35,6 @@ void loop() {
   imu6.read();
   imu_mag.read();
 
-  now = millis();
 
   Serial.print(millis()); Serial.print(",");
   Serial.print(imu6.a.x); Serial.print(",");
