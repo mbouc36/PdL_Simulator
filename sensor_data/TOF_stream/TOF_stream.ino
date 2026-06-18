@@ -4,7 +4,7 @@
 Adafruit_VL53L0X lox = Adafruit_VL53L0X();
 
 void setup() {
-  Serial.begin(9600); // Start serial communication at 9600 baud
+  Serial.begin(115200); // Start serial communication at 9600 baud
 
   // Wait until serial port opens for native USB devices
   while (!Serial) {
@@ -24,6 +24,7 @@ void setup() {
 
 void loop() {
   VL53L0X_RangingMeasurementData_t measure;
+  Serial.print("hello");
 
   Serial.print("Reading a measurement... ");
   lox.rangingTest(&measure, false); // pass 'true' for debug output
