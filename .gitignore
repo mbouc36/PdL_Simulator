@@ -3,5 +3,4 @@ venv
 venv11
 __pycache__
 local_config.json
-output_data/*
 000_name
