@@ -4,6 +4,10 @@ import cv2
 import csv
 import serial
 from pathlib import Path
+from datetime import date
+from enum import Enum
+import secrets
+
 
 import argparse
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
@@ -16,6 +20,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QStackedWidget,
     QStackedLayout,
+    QLineEdit,
+    QHBoxLayout,
 )
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -30,7 +36,7 @@ BAUD_RATE = config["baud_rate"]
 NUM_SENSOR_OUTPUT_VALUE = 23
 
 
-OUTPUT_DATA_FOLDER =  os.path.join(
+OUTPUT_DATA_FOLDER = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "../output_data"
 )
 
@@ -38,6 +44,10 @@ VIDEO_FILENAME = "video.mp4"
 RAW_SENSOR_CSV = "raw_sensor_data.csv"
 PROCESSED_DATA_CSV = "processed_data.csv"
 
+
+class SurgicalTasks(Enum):
+    PEG_TRANSFER = 1
+    INTRACORPOREAL_SUTURING = 2
 
 
 class DataThread(QThread):
@@ -54,7 +64,7 @@ class DataThread(QThread):
         # Create the folder safely
         folder_path.mkdir(parents=True, exist_ok=True)
 
-        self.video_output_path = os.path.join(self.output_folder,VIDEO_FILENAME)
+        self.video_output_path = os.path.join(self.output_folder, VIDEO_FILENAME)
         self.raw_data_csv = os.path.join(self.output_folder, RAW_SENSOR_CSV)
         self.processed_data_csv = os.path.join(self.output_folder, PROCESSED_DATA_CSV)
         self.frame_idx = 0
@@ -66,10 +76,9 @@ class DataThread(QThread):
             print(f"Failed to connect to port: {SERIAL_PORT}")
             exit(1)
 
-
     def write_to_csv(self, filen_path, values):
         try:
-            with open(filen_path, mode='a', newline='', encoding='utf-8') as file:
+            with open(filen_path, mode="a", newline="", encoding="utf-8") as file:
                 writer = csv.writer(file)
                 writer.writerow(values)
         except Exception as e:
@@ -98,8 +107,8 @@ class DataThread(QThread):
         ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
         while self.running:
             # Synchronize everything with serial prints
-            try: 
-                line = ser.readline().decode("utf-8").strip() # wait till new line
+            try:
+                line = ser.readline().decode("utf-8").strip()  # wait till new line
             except Exception as e:
                 print(e)
                 continue
@@ -123,15 +132,21 @@ class DataThread(QThread):
 
             arduino_time = raw_sensor_data[0]
             load_cell_values = raw_sensor_data[1:3]
-            tof_values = raw_sensor_data[3:5] 
+            tof_values = raw_sensor_data[3:5]
             left_imu_values = [arduino_time] + raw_sensor_data[5:14]
-            right_imu_values = [arduino_time] + raw_sensor_data[14:] 
+            right_imu_values = [arduino_time] + raw_sensor_data[14:]
 
             distances = list(tof_manager.get_distances(tof_values))
             left_angles = list(left_imu.get_angles(left_imu_values))
             right_angles = list(right_imu.get_angles(right_imu_values))
             # Ensure all values are the same format
-            processed_data = [arduino_time] + list(load_cell_values) + distances + left_angles + right_angles
+            processed_data = (
+                [arduino_time]
+                + list(load_cell_values)
+                + distances
+                + left_angles
+                + right_angles
+            )
 
             # load to csv
             self.write_to_csv(self.processed_data_csv, processed_data)
@@ -139,7 +154,6 @@ class DataThread(QThread):
 
         video_output.release()
         cap.release()
-
 
     def stop(self):
         self.running = False
@@ -153,11 +167,41 @@ class MainWindow(QWidget):
         self.setWindowTitle("GUI with Livestream")
         self.resize(900, 600)
 
+        self.name = ""
+        self.key = ""
+
         self.video_thread = None
         self.pages = QStackedWidget()
 
-        self.create_start_page()
-        self.create_video_page()
+        self.btn_style = """
+        QPushButton {
+            background-color: #FFFFF0;
+            color: black;
+            border: 1px solid #D8D0C0;   /* Thin warm gray outline */
+            border-radius: 12px;
+            padding: 10px;
+            font-size: 16px;
+            font-family:  "Times New Roman", Times, serif;
+        }
+
+        QPushButton:hover {
+            background-color: #FAF0E6;
+            border: 1px solid #C8C0B0;
+        }
+
+        QPushButton:pressed {
+            background-color: #FDF6E3;
+            border: 1px solid #B8B0A0;
+        }
+        """
+
+        # Create User Pages
+        self.login_page = self.create_login_page()
+        self.video_page = self.create_video_page()
+        self.new_user_page = self.create_new_user_page()
+        self.existing_user_page =self.create_existing_user_page()
+        self.task_menu_page = self.create_task_menu()
+        self.post_task_page = self.create_post_task_menu()
 
         main_layout = QVBoxLayout()
         main_layout.addWidget(self.pages)
@@ -171,7 +215,7 @@ class MainWindow(QWidget):
             }
         """)
 
-    def create_start_page(self):
+    def create_login_page(self):
         start_page = QWidget()
         layout = QVBoxLayout()
 
@@ -183,48 +227,37 @@ class MainWindow(QWidget):
             color: black;
             font-family:  "Times New Roman", Times, serif;
             margin-top: 48px;
-            margin-bottom: 48px;
+            margin-bottom: 24px;
         """)
 
-        start_btn = QPushButton("Start")
-        settings_btn = QPushButton("Settings")
+        new_user_btn = QPushButton("New User")
+        existing_user_btn = QPushButton("Existing User")
 
-        for btn in [start_btn, settings_btn]:
+        for btn in [new_user_btn, existing_user_btn]:
             btn.setFixedHeight(50)
             btn.setMinimumWidth(250)
             btn.setMaximumWidth(400)
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #FFFFF0;
-                    color: black;
-                    border: 1px solid #D8D0C0;   /* Thin warm gray outline */
-                    border-radius: 12px;
-                    padding: 10px;
-                    font-size: 16px;
-                    font-family:  "Times New Roman", Times, serif;
-                }
+            btn.setStyleSheet(self.btn_style)
 
-                QPushButton:hover {
-                    background-color: #FAF0E6;
-                    border: 1px solid #C8C0B0;
-                }
+        new_user_btn.clicked.connect(
+            lambda: self.pages.setCurrentWidget(self.new_user_page)
+        )
 
-                QPushButton:pressed {
-                    background-color: #FDF6E3;
-                    border: 1px solid #B8B0A0;
-                }
-            """)
+        existing_user_btn.clicked.connect(
+            lambda: self.pages.setCurrentWidget(self.existing_user_page)
+        )
 
-        start_btn.clicked.connect(self.show_video_page)
 
         layout.addStretch()
         layout.addWidget(title)
-        layout.addWidget(start_btn, alignment=Qt.AlignCenter)
-        layout.addWidget(settings_btn, alignment=Qt.AlignCenter)
+        layout.addWidget(new_user_btn, alignment=Qt.AlignCenter)
+        layout.addWidget(existing_user_btn, alignment=Qt.AlignCenter)
         layout.addStretch()
 
         start_page.setLayout(layout)
         self.pages.addWidget(start_page)
+
+        return start_page
 
     def create_video_page(self):
         video_page = QWidget()
@@ -248,11 +281,11 @@ class MainWindow(QWidget):
         overlay_layout.setContentsMargins(20, 20, 20, 20)
         overlay_layout.setSpacing(0)
 
-        exit_btn = QPushButton("Exit")
-        exit_btn.setFixedSize(120, 50)
-        exit_btn.clicked.connect(self.close)
+        complete_btn = QPushButton("Complete Task")
+        complete_btn.setFixedSize(120, 50)
+        complete_btn.clicked.connect(lambda: self.pages.setCurrentWidget(self.post_task_page))
 
-        exit_btn.setStyleSheet("""
+        complete_btn.setStyleSheet("""
             QPushButton {
                 background-color: #FFFFF0;
                 color: black;
@@ -263,7 +296,7 @@ class MainWindow(QWidget):
             }
         """)
 
-        overlay_layout.addWidget(exit_btn, alignment=Qt.AlignTop | Qt.AlignRight)
+        overlay_layout.addWidget(complete_btn, alignment=Qt.AlignTop | Qt.AlignRight)
         overlay_layout.addStretch()
 
         stack_layout.addWidget(self.video_label)
@@ -274,12 +307,68 @@ class MainWindow(QWidget):
 
         self.pages.addWidget(video_page)
 
+        return video_page
+
     def show_video_page(self):
         self.pages.setCurrentIndex(1)
         if not self.test_mode:
             self.start_video()
         else:
             pass
+
+    def manage_folders(self, username: str, task_type: SurgicalTasks) -> str:
+        """
+        Create and organize folders needed for data collection
+
+        The format will be as follows
+
+        output_data
+            date
+                public_key
+                    - 000_name.txt
+                    - 001_peg
+                        - sensor_data (created by data thread)
+                        - camera data (created by data thread)
+                    - 002_suturing
+                    ...
+
+        return: the path of the trial for the specfied user on todays date
+        """
+
+        today = date.today().strftime("%d/%m/%Y")
+        todays_folder = os.path.join(OUTPUT_DATA_FOLDER, today)
+        public_key = secrets.token_urlsafe(16)
+        user_folder_today = os.path.join(todays_folder, public_key)
+        name_file = os.path.join(user_folder_today, "000_name.txt")
+        task_num = "001"
+
+        # Create folder for the date and all required children
+        if not os.path.exists(todays_folder):
+            todays_folder.mkdir(parents=True, exist_ok=True)
+
+        # Create folder for the user and all required children
+        if not os.path.exists(user_folder_today):
+            user_folder_today.mkdir(parents=True, exist_ok=True)
+            # create file storing name
+            with open(name_file, "w") as file:
+                file.write(username)
+
+        # User foler exists, check for task number
+        else:
+            # list of all files sorted
+            task_folders = sorted(
+                os.listdir(user_folder_today), key=lambda name: int(name[:3])
+            )
+
+            task_num = task_folders[-1][:3] + 1
+
+        task_name = ""
+        if task_type == SurgicalTasks.PEG_TRANSFER:
+            task_name = "peg_transfer"
+        elif task_type == SurgicalTasks.INTRACORPOREAL_SUTURING:
+            task_name = "intracorp_suturing"
+
+        return task_num + task_name
 
     def start_video(self):
         if self.video_thread is not None:
@@ -306,6 +395,319 @@ class MainWindow(QWidget):
             )
         )
 
+    def create_new_user_page(self):
+        """
+        GUI page which prompts the user for a username
+        """
+
+        new_user_page = QWidget()
+        layout = QVBoxLayout()
+
+        title = QLabel("Create New User")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("""
+            font-size: 48px;
+            font-weight: bold;
+            color: black;
+            font-family:  "Times New Roman", Times, serif;
+            margin-top: 180px;
+            margin-bottom: 12px;
+        """)
+
+        name_label = QLabel("Name:")
+        name_label.setStyleSheet("""
+            font-size: 24px;
+            font-family: "Times New Roman";
+            color: black;
+        """)
+
+        name_box = QLineEdit()
+        name_box.setFixedHeight(45)
+
+        name_box.setStyleSheet("""
+            QLineEdit {
+                font-size: 24px;
+                font-family: "Times New Roman";
+                color: black;
+                background-color: transparent;
+                border: 1px solid #D8D0C0;
+                padding: 4px 8px;
+            }
+        """)
+        name_box.setPlaceholderText("Enter your name")
+        name_box.setFocus()
+
+        text_box_row = QHBoxLayout()
+        text_box_row.addStretch()
+        text_box_row.addWidget(name_label)
+        text_box_row.addWidget(name_box)
+        text_box_row.addStretch()
+
+        next_btn = QPushButton("Next")
+        back_btn = QPushButton("Back")
+
+        for btn in [next_btn, back_btn]:
+            btn.setFixedHeight(50)
+            btn.setMinimumWidth(250)
+            btn.setMaximumWidth(400)
+            btn.setStyleSheet(self.btn_style)
+
+        # Bottom button
+        bottom_row = QHBoxLayout()
+        bottom_row.addWidget(back_btn, alignment=Qt.AlignLeft)
+        bottom_row.addStretch()
+        bottom_row.addWidget(next_btn, alignment=Qt.AlignRight)
+
+        back_btn.clicked.connect(
+            lambda: self.pages.setCurrentWidget(self.login_page)
+        )
+
+    
+        error_label = QLabel("")
+        error_label.setAlignment(Qt.AlignCenter)
+        error_label.setStyleSheet("""
+            color: red;
+            font-size: 18px;
+            font-family: "Times New Roman";
+        """)
+
+        layout.addWidget(title)
+        layout.addSpacing(10)
+        layout.addLayout(text_box_row)
+        layout.addWidget(error_label)
+        layout.addStretch()
+        layout.addLayout(bottom_row)
+
+        new_user_page.setLayout(layout)
+        self.pages.addWidget(new_user_page)
+
+        def validate_username():
+            name = name_box.text().strip()
+            if not name:
+                error_label.setText("Please enter a name.")
+                return
+
+            # Clear any previous error
+            error_label.setText("")
+            name_box.clear()
+            self.name = name
+            
+            self.pages.setCurrentWidget(self.task_menu_page)
+            return
+
+        next_btn.clicked.connect(lambda checked=False: validate_username())
+
+
+        return new_user_page
+
+    def create_existing_user_page(self):
+        """
+        GUI page which promts the user for a key
+
+        If a matching key isn't found notify the user and allow retries
+        """
+        existing_user_page = QWidget()
+        layout = QVBoxLayout()
+
+        title = QLabel("Existing User")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("""
+            font-size: 48px;
+            font-weight: bold;
+            color: black;
+            font-family:  "Times New Roman", Times, serif;
+            margin-top: 180px;
+            margin-bottom: 12px;
+        """)
+
+        key_label = QLabel("Name:")
+        key_label.setStyleSheet("""
+            font-size: 24px;
+            font-family: "Times New Roman";
+            color: black;
+        """)
+        key_box = QLineEdit()
+        key_box.setFixedHeight(45)
+
+        key_box.setStyleSheet("""
+            QLineEdit {
+                font-size: 24px;
+                font-family: "Times New Roman";
+                color: black;
+                background-color: transparent;
+                border: 1px solid #D8D0C0;
+                padding: 4px 8px;
+            }
+        """)
+        key_box.setPlaceholderText("Enter your key")
+
+        text_box_row = QHBoxLayout()
+        text_box_row.addStretch()
+        text_box_row.addWidget(key_label)
+        text_box_row.addWidget(key_box)
+        text_box_row.addStretch()
+
+        next_btn = QPushButton("Next")
+        back_btn = QPushButton("Back")
+
+        for btn in [next_btn, back_btn]:
+            btn.setFixedHeight(50)
+            btn.setMinimumWidth(250)
+            btn.setMaximumWidth(400)
+            btn.setStyleSheet(self.btn_style)
+
+        # Bottom butt21
+        bottom_row = QHBoxLayout()
+        bottom_row.addWidget(back_btn, alignment=Qt.AlignLeft)
+        bottom_row.addStretch()
+        bottom_row.addWidget(next_btn, alignment=Qt.AlignRight)
+
+        back_btn.clicked.connect(
+            lambda: self.pages.setCurrentWidget(self.login_page)
+        )
+
+
+        existing_user_page.setLayout(layout)
+        self.pages.addWidget(existing_user_page)
+
+            
+        error_label = QLabel("")
+        error_label.setAlignment(Qt.AlignCenter)
+        error_label.setStyleSheet("""
+            color: red;
+            font-size: 18px;
+            font-family: "Times New Roman";
+        """)
+
+        layout.addWidget(title)
+        layout.addSpacing(10)
+        layout.addLayout(text_box_row)
+        layout.addWidget(error_label)
+        layout.addStretch()
+        layout.addLayout(bottom_row)
+
+        def validate_key():
+            key = key_box.text().strip()
+
+            # TODO Replace logic with a search for the key
+            if not key:
+                error_label.setText("Please enter a valid key.")
+                return
+
+            # Clear any previous error
+            error_label.setText("")
+            self.key = key
+            
+            self.pages.setCurrentWidget(self.task_menu_page)
+            return
+
+        next_btn.clicked.connect(lambda checked=False: validate_key())
+
+        return existing_user_page
+
+    def create_task_menu(self):
+        """
+        A menu which lists out tasks
+        """
+        task_menu_page = QWidget()
+        layout = QVBoxLayout()
+
+        title = QLabel("Task Menu")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("""
+            font-size: 48px;
+            font-weight: bold;
+            color: black;
+            font-family:  "Times New Roman", Times, serif;
+            margin-top: 24px;
+            margin-bottom: 12px;
+        """)
+
+        peg_transfer_btn = QPushButton("Peg Transfer")
+        in_suturing_btn = QPushButton("Intracorporeal Suturing")
+
+        for btn in [peg_transfer_btn, in_suturing_btn]:
+            btn.setFixedHeight(50)
+            btn.setMinimumWidth(250)
+            btn.setMaximumWidth(400)
+            btn.setStyleSheet(self.btn_style)
+
+        peg_transfer_btn.clicked.connect(
+            lambda: self.pages.setCurrentWidget(self.video_page)
+        )
+
+        in_suturing_btn.clicked.connect(
+            lambda: self.pages.setCurrentWidget(self.video_page)
+        )
+
+
+        layout.addStretch()
+        layout.addWidget(title)
+        layout.addWidget(peg_transfer_btn, alignment=Qt.AlignCenter)
+        layout.addWidget(in_suturing_btn, alignment=Qt.AlignCenter)
+        layout.addStretch()
+
+        task_menu_page.setLayout(layout)
+        self.pages.addWidget(task_menu_page)
+
+        return task_menu_page
+
+    def create_post_task_menu(self):
+        """
+        A menu which pops up after the task is complete
+
+        Button options:
+            - New Task
+            - Logout
+        """
+        post_task_page = QWidget()
+        layout = QVBoxLayout()
+
+        title = QLabel("Task Complete")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("""
+            font-size: 48px;
+            font-weight: bold;
+            color: black;
+            font-family:  "Times New Roman", Times, serif;
+            margin-top: 24px;
+            margin-bottom: 12px;
+        """)
+
+        new_task_btn = QPushButton("New Task")
+        logout_btn = QPushButton("Logout")
+
+        for btn in [new_task_btn, logout_btn]:
+            btn.setFixedHeight(50)
+            btn.setMinimumWidth(250)
+            btn.setMaximumWidth(400)
+            btn.setStyleSheet(self.btn_style)
+
+        new_task_btn.clicked.connect(
+            lambda: self.pages.setCurrentWidget(self.task_menu_page)
+        )
+
+        def logout_user():
+            self.key = ""
+            self.name = ""
+            self.pages.setCurrentWidget(self.login_page)
+
+        logout_btn.clicked.connect(
+            lambda checked=False: logout_user()
+        )
+
+        layout.addStretch()
+        layout.addWidget(title)
+        layout.addWidget(new_task_btn, alignment=Qt.AlignCenter)
+        layout.addWidget(logout_btn, alignment=Qt.AlignCenter)
+        layout.addStretch()
+
+        post_task_page.setLayout(layout)
+        self.pages.addWidget(post_task_page)
+
+        return post_task_page
+
+
     def closeEvent(self, event):
         if self.video_thread is not None:
             self.video_thread.stop()
@@ -314,8 +716,12 @@ class MainWindow(QWidget):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="A script which loads the gui and parses data from the camera and arduino sensors")
-    parser.add_argument('--test', action='store_true', help='Run GUI without sensors and camera')
+    parser = argparse.ArgumentParser(
+        description="A script which loads the gui and parses data from the camera and arduino sensors"
+    )
+    parser.add_argument(
+        "--test", action="store_true", help="Run GUI without sensors and camera"
+    )
 
     args = parser.parse_args()
 
