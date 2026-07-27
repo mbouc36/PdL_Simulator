@@ -2,7 +2,7 @@
 #include <Wire.h>
 #include <LSM6.h>
 #include <LIS3MDL.h>
-#include <VL53L0X.h>
+#include <VL53L1X.h>
 
 
 #define FREQUENCY 30
@@ -35,7 +35,7 @@ float sensitivity = 4.375/ 1000;
 #define TOF1_ADDR 0x30
 #define TOF2_ADDR 0x31
 
-VL53L0X lox_left, lox_right;
+VL53L1X lox_left, lox_right;
 
 
 void calibrate_scale(HX711* scale){
@@ -60,7 +60,7 @@ void setup() {
 
   // IMU setup
   /*LSM6::device_auto, LSM6::sa0_low*/
-  if (!imu6_left.init(LSM6::device_auto, LSM6::sa0_high)) {
+  if (!imu6_left.init(LSM6::device_auto, LSM6::sa0_low)) {
     Serial.println("Failed to detect left LSM6!");
   }
   imu6_left.enableDefault();
@@ -71,7 +71,7 @@ void setup() {
   }
   imu6_right.enableDefault();
 
-  if (!imu_mag_left.init(LIS3MDL::device_auto, LIS3MDL::sa1_high)) {
+  if (!imu_mag_left.init(LIS3MDL::device_auto, LIS3MDL::sa1_low)) {
     Serial.println("Failed to detect left LIS3MDL!");
     while (1);
   }
@@ -122,8 +122,8 @@ void setup() {
   }
   lox_right.setAddress(TOF2_ADDR);
 
-  lox_left.startContinuous();
-  lox_right.startContinuous();
+  lox_left.startContinuous(50);
+  lox_right.startContinuous(50);
   Serial.println("Finished TOF setup");
 
   // Load Cell Setup
@@ -166,8 +166,8 @@ void loop() {
     Serial.print(scale_back.get_units(1), 2); Serial.print(", ");
 
     // TOF Prints
-    Serial.print(lox_left.readRangeContinuousMillimeters()); Serial.print(", ");
-    Serial.print(lox_right.readRangeContinuousMillimeters()); Serial.print(", ");
+    Serial.print(lox_left.read()); Serial.print(", ");
+    Serial.print(lox_right.read()); Serial.print(", ");
 
     // Left IMU
     Serial.print(imu6_left.a.x); Serial.print(", ");
