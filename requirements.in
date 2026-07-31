@@ -9,3 +9,6 @@ ahrs
 scipy
 matplotlib
 cv2
+pygame
+imageio[ffmpeg]
+pandas

@@ -11,6 +11,8 @@ Contains code for IMU (MinIMU-9) and ToF (VL53L0X) sensors as well as Load Cell 
 `pip install -r requirements.txt`
 
 ## Setup Config
+Ensure python is compatiable with tkinter
+
 Tip: To find serial ports on Mac run: `ls /dev/cu.*`
 
 `python3 update_config.py`
