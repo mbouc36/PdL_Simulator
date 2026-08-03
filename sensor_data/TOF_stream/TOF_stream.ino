@@ -4,7 +4,7 @@
 Adafruit_VL53L0X lox = Adafruit_VL53L0X();
 
 void setup() {
-  Serial.begin(9600); // Start serial communication at 9600 baud
+  Serial.begin(115200); // Start serial communication at 9600 baud
 
   // Wait until serial port opens for native USB devices
   while (!Serial) {
@@ -14,7 +14,7 @@ void setup() {
   Serial.println("Adafruit VL53L0X test");
 
   // Initialize the sensor
-  if (!lox.begin()) {
+  if (!lox.begin(0x29, true)) {
     Serial.println(F("Failed to boot VL53L0X"));
     while (1); // Stay here if the sensor fails to initialize
   }

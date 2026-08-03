@@ -13,16 +13,18 @@ unsigned long dt;
 void setup() {
   Serial.begin(115200);
   Wire.begin();
+  Serial.println("start");
 
   /*LSM6::device_auto, LSM6::sa0_low*/
-  if (!imu6.init(LSM6::device_auto, LSM6::sa0_high)) {
+  if (!imu6.init()) {
     Serial.println("Failed to detect LSM6!");
     while (1);
   }
   imu6.enableDefault(); 
+  Serial.print("Allo");
 
 
-  if (!imu_mag.init(LIS3MDL::device_auto, LIS3MDL::sa1_high)) {
+  if (!imu_mag.init()) {
     Serial.println("Failed to detect left LIS3MDL!");
     while (1);
   }
