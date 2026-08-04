@@ -31,6 +31,7 @@ unsigned long now;
 unsigned long last_print;
 const unsigned long period_ms = 1000/PRINT_FREQUENCY;
 Snapshot latest_snapshot;
+
 // Load Cell
 #define DOUT_BACK 5
 #define CLK_BACK 4
@@ -47,7 +48,7 @@ float calibration_factor = -2150.0;
 LSM6 imu6_left, imu6_right;
 LIS3MDL imu_mag_left, imu_mag_right;
 
-float sensitivity = 4.375/ 1000;
+float imu_sensitivity = 4.375/ 1000; // This is proportional to dps see data sheet
 
 // TOF
 #define XSHUT_1 6
@@ -55,6 +56,8 @@ float sensitivity = 4.375/ 1000;
 
 #define TOF1_ADDR 0x30
 #define TOF2_ADDR 0x31
+
+#define CONTINUOUS_PERIOD 100
 
 VL53L1X lox_left, lox_right;
 
@@ -97,8 +100,9 @@ void setup() {
     while (1);
   }
   imu_mag_left.enableDefault();
-  imu6_left.writeReg(LSM6::CTRL2_G, (uint8_t) 0b01000010);
-  imu_mag_left.writeReg(LIS3MDL::CTRL_REG1, 0b00011100);
+  uint8_t imu6_reg = imu6_left.readReg(LSM6::CTRL2_G);
+  imu6_left.writeReg(LSM6::CTRL2_G, imu6_reg | 0b00000010); // Set gyro dps to 125
+  imu_mag_left.writeReg(LIS3MDL::CTRL_REG1, 0b00011100); // Set mag to 80Hz
 
 
   if (!imu_mag_right.init()) {
@@ -106,7 +110,9 @@ void setup() {
     while (1);
   }
   imu_mag_right.enableDefault();
-  imu6_right.writeReg(LSM6::CTRL2_G, (uint8_t) 0b01000010);
+  imu6_reg = imu6_right.readReg(LSM6::CTRL2_G);
+  imu6_right.writeReg(LSM6::CTRL2_G, imu6_reg | 0b00000010); // Set gyro dps to 125
+  imu_mag_right.writeReg(LIS3MDL::CTRL_REG1, 0b00011100); // Set mag to 80Hz
 
   Serial.println("Completed IMU setup");
 
@@ -144,8 +150,8 @@ void setup() {
   }
   lox_right.setAddress(TOF2_ADDR);
 
-  lox_left.startContinuous(10);
-  lox_right.startContinuous(10);
+  lox_left.startContinuous(CONTINUOUS_PERIOD);
+  lox_right.startContinuous(CONTINUOUS_PERIOD);
   Serial.println("Finished TOF setup");
 
   // Load Cell Setup
@@ -175,68 +181,63 @@ void loop() {
 
   if (now - last_print >= period_ms) {
     last_print = now;
-    // Serial.print(now); Serial.print(","); Serial.print(",");
+    Serial.print(now); Serial.print(","); Serial.print(",");
 
-    // // Load Cells
-    // Serial.print(latest_snapshot.front_weight); Serial.print(",");
-    // Serial.print(latest_snapshot.back_weight); Serial.print(",");
+    // Load Cells
+    Serial.print(latest_snapshot.front_weight); Serial.print(",");
+    Serial.print(latest_snapshot.back_weight); Serial.print(",");
 
-    // // TOF
-    // Serial.print(latest_snapshot.left_distance); Serial.print(",");
-    // Serial.print(latest_snapshot.right_distance); Serial.print(",");
+    // TOF
+    Serial.print(latest_snapshot.left_distance); Serial.print(",");
+    Serial.print(latest_snapshot.right_distance); Serial.print(",");
 
-    // // IMU
-    // Serial.print(latest_snapshot.left_imu.a.x); Serial.print(",");
-    // Serial.print(latest_snapshot.left_imu.a.y); Serial.print(",");
-    // Serial.print(latest_snapshot.left_imu.a.z); Serial.print(",");
-    // Serial.print(latest_snapshot.left_imu.g.x); Serial.print(",");
-    // Serial.print(latest_snapshot.left_imu.g.y); Serial.print(",");
-    // Serial.print(latest_snapshot.left_imu.g.z); Serial.print(",");
-    // Serial.print(latest_snapshot.left_imu.m.x); Serial.print(",");
-    // Serial.print(latest_snapshot.left_imu.m.y); Serial.print(",");
-    // Serial.print(latest_snapshot.left_imu.m.z); Serial.print(",");
+    // IMU
+    Serial.print(latest_snapshot.left_imu.a.x); Serial.print(",");
+    Serial.print(latest_snapshot.left_imu.a.y); Serial.print(",");
+    Serial.print(latest_snapshot.left_imu.a.z); Serial.print(",");
+    Serial.print(latest_snapshot.left_imu.g.x); Serial.print(",");
+    Serial.print(latest_snapshot.left_imu.g.y); Serial.print(",");
+    Serial.print(latest_snapshot.left_imu.g.z); Serial.print(",");
+    Serial.print(latest_snapshot.left_imu.m.x); Serial.print(",");
+    Serial.print(latest_snapshot.left_imu.m.y); Serial.print(",");
+    Serial.print(latest_snapshot.left_imu.m.z); Serial.print(",");
 
-    // Serial.print(latest_snapshot.right_imu.a.x); Serial.print(",");
-    // Serial.print(latest_snapshot.right_imu.a.y); Serial.print(",");
-    // Serial.print(latest_snapshot.right_imu.a.z); Serial.print(",");
-    // Serial.print(latest_snapshot.right_imu.g.x); Serial.print(",");
-    // Serial.print(latest_snapshot.right_imu.g.y); Serial.print(",");
-    // Serial.print(latest_snapshot.right_imu.g.z); Serial.print(",");
-    // Serial.print(latest_snapshot.right_imu.m.x); Serial.print(",");
-    // Serial.print(latest_snapshot.right_imu.m.y); Serial.print(",");
-    // Serial.print(latest_snapshot.right_imu.m.z);
+    Serial.print(latest_snapshot.right_imu.a.x); Serial.print(",");
+    Serial.print(latest_snapshot.right_imu.a.y); Serial.print(",");
+    Serial.print(latest_snapshot.right_imu.a.z); Serial.print(",");
+    Serial.print(latest_snapshot.right_imu.g.x); Serial.print(",");
+    Serial.print(latest_snapshot.right_imu.g.y); Serial.print(",");
+    Serial.print(latest_snapshot.right_imu.g.z); Serial.print(",");
+    Serial.print(latest_snapshot.right_imu.m.x); Serial.print(",");
+    Serial.print(latest_snapshot.right_imu.m.y); Serial.print(",");
+    Serial.print(latest_snapshot.right_imu.m.z);
     Serial.println("");
 
   }
 
-  // if (imu6_left.readReg((LSM6::STATUS_REG) & 0b00000011) && (imu_mag_left.readReg(LIS3MDL::STATUS_REG) & 0b00001111)){
-  if ( (imu_mag_left.readReg(LIS3MDL::STATUS_REG) & 0b00001111)){
-
-     Serial.print("Reading IMU");
+  if (imu6_left.readReg((LSM6::STATUS_REG) & 0b00000011) && (imu_mag_left.readReg(LIS3MDL::STATUS_REG) & 0b00001111)){
     imu6_left.read();
     imu_mag_left.read();
     latest_snapshot.left_imu.a.x = imu6_left.a.x;
     latest_snapshot.left_imu.a.y = imu6_left.a.y;
     latest_snapshot.left_imu.a.z = imu6_left.a.z;
-    latest_snapshot.left_imu.g.x = imu6_left.g.x;
-    latest_snapshot.left_imu.g.y = imu6_left.g.y;
-    latest_snapshot.left_imu.g.z = imu6_left.g.z;
+    latest_snapshot.left_imu.g.x = imu6_left.g.x * imu_sensitivity;
+    latest_snapshot.left_imu.g.y = imu6_left.g.y * imu_sensitivity;
+    latest_snapshot.left_imu.g.z = imu6_left.g.z * imu_sensitivity;
     latest_snapshot.left_imu.m.x = imu_mag_left.m.x;
     latest_snapshot.left_imu.m.y = imu_mag_left.m.y;
     latest_snapshot.left_imu.m.z = imu_mag_left.m.z;
   }
 
-  // if (imu6_right.readReg((LSM6::STATUS_REG) & 0b00000011) && (imu_mag_right.readReg(LIS3MDL::STATUS_REG) & 0b00001111)){
-  if (imu_mag_right.readReg(LIS3MDL::STATUS_REG) & 0b00001111){
-
+  if (imu6_right.readReg((LSM6::STATUS_REG) & 0b00000011) && (imu_mag_right.readReg(LIS3MDL::STATUS_REG) & 0b00001111)){
     imu6_right.read();
     imu_mag_right.read();
     latest_snapshot.right_imu.a.x = imu6_right.a.x;
     latest_snapshot.right_imu.a.y = imu6_right.a.y;
     latest_snapshot.right_imu.a.z = imu6_right.a.z;
-    latest_snapshot.right_imu.g.x = imu6_right.g.x;
-    latest_snapshot.right_imu.g.y = imu6_right.g.y;
-    latest_snapshot.right_imu.g.z = imu6_right.g.z;
+    latest_snapshot.right_imu.g.x = imu6_right.g.x * imu_sensitivity;
+    latest_snapshot.right_imu.g.y = imu6_right.g.y * imu_sensitivity;
+    latest_snapshot.right_imu.g.z = imu6_right.g.z * imu_sensitivity;
     latest_snapshot.right_imu.m.x = imu_mag_right.m.x;
     latest_snapshot.right_imu.m.y = imu_mag_right.m.y;
     latest_snapshot.right_imu.m.z = imu_mag_right.m.z;
