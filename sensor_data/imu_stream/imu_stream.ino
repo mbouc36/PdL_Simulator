@@ -13,6 +13,7 @@ unsigned long dt;
 void setup() {
   Serial.begin(115200);
   Wire.begin();
+  Serial.println("start");
 
   /*LSM6::device_auto, LSM6::sa0_low*/
   if (!imu6.init()) {
@@ -20,6 +21,7 @@ void setup() {
     while (1);
   }
   imu6.enableDefault(); 
+  Serial.print("Allo");
 
 
   if (!imu_mag.init()) {
