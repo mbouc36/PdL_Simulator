@@ -45,6 +45,10 @@ HX711 scale_front, scale_back;
 float calibration_factor = -2150.0; 
 
 // IMU 
+#define GYRO_CTRL_REGISTER 0b01000010 // Set gyro to 104 Hz sampling and 125 dps
+#define ACC_CTRL_REGISTER 0b01000000 // Set accelerometer to 104Hz sampling
+#define MAG_CTRL_REGISTER 0b00011100 // Set sampling to 80Hz
+
 LSM6 imu6_left, imu6_right;
 LIS3MDL imu_mag_left, imu_mag_right;
 
@@ -100,9 +104,9 @@ void setup() {
     while (1);
   }
   imu_mag_left.enableDefault();
-  uint8_t imu6_reg = imu6_left.readReg(LSM6::CTRL2_G);
-  imu6_left.writeReg(LSM6::CTRL2_G, imu6_reg | 0b00000010); // Set gyro dps to 125
-  imu_mag_left.writeReg(LIS3MDL::CTRL_REG1, 0b00011100); // Set mag to 80Hz
+  imu6_left.writeReg(LSM6::CTRL2_G, GYRO_CTRL_REGISTER); 
+  imu6_left.writeReg(LSM6::CTRL1_XL, ACC_CTRL_REGISTER);
+  imu_mag_left.writeReg(LIS3MDL::CTRL_REG1, MAG_CTRL_REGISTER); 
 
 
   if (!imu_mag_right.init()) {
@@ -110,9 +114,9 @@ void setup() {
     while (1);
   }
   imu_mag_right.enableDefault();
-  imu6_reg = imu6_right.readReg(LSM6::CTRL2_G);
-  imu6_right.writeReg(LSM6::CTRL2_G, imu6_reg | 0b00000010); // Set gyro dps to 125
-  imu_mag_right.writeReg(LIS3MDL::CTRL_REG1, 0b00011100); // Set mag to 80Hz
+  imu6_right.writeReg(LSM6::CTRL2_G, GYRO_CTRL_REGISTER);
+  imu6_right.writeReg(LSM6::CTRL1_XL, ACC_CTRL_REGISTER); 
+  imu_mag_right.writeReg(LIS3MDL::CTRL_REG1, MAG_CTRL_REGISTER); 
 
   Serial.println("Completed IMU setup");
 
@@ -181,35 +185,35 @@ void loop() {
 
   if (now - last_print >= period_ms) {
     last_print = now;
-    Serial.print(now); Serial.print(","); Serial.print(",");
+    Serial.print(now); Serial.print(", "); Serial.print(", ");
 
     // Load Cells
-    Serial.print(latest_snapshot.front_weight); Serial.print(",");
-    Serial.print(latest_snapshot.back_weight); Serial.print(",");
+    Serial.print(latest_snapshot.front_weight); Serial.print(", ");
+    Serial.print(latest_snapshot.back_weight); Serial.print(", ");
 
     // TOF
-    Serial.print(latest_snapshot.left_distance); Serial.print(",");
-    Serial.print(latest_snapshot.right_distance); Serial.print(",");
+    Serial.print(latest_snapshot.left_distance); Serial.print(", ");
+    Serial.print(latest_snapshot.right_distance); Serial.print(", ");
 
     // IMU
-    Serial.print(latest_snapshot.left_imu.a.x); Serial.print(",");
-    Serial.print(latest_snapshot.left_imu.a.y); Serial.print(",");
-    Serial.print(latest_snapshot.left_imu.a.z); Serial.print(",");
-    Serial.print(latest_snapshot.left_imu.g.x); Serial.print(",");
-    Serial.print(latest_snapshot.left_imu.g.y); Serial.print(",");
-    Serial.print(latest_snapshot.left_imu.g.z); Serial.print(",");
-    Serial.print(latest_snapshot.left_imu.m.x); Serial.print(",");
-    Serial.print(latest_snapshot.left_imu.m.y); Serial.print(",");
-    Serial.print(latest_snapshot.left_imu.m.z); Serial.print(",");
+    Serial.print(latest_snapshot.left_imu.a.x); Serial.print(", ");
+    Serial.print(latest_snapshot.left_imu.a.y); Serial.print(", ");
+    Serial.print(latest_snapshot.left_imu.a.z); Serial.print(", ");
+    Serial.print(latest_snapshot.left_imu.g.x); Serial.print(", ");
+    Serial.print(latest_snapshot.left_imu.g.y); Serial.print(", ");
+    Serial.print(latest_snapshot.left_imu.g.z); Serial.print(", ");
+    Serial.print(latest_snapshot.left_imu.m.x); Serial.print(", ");
+    Serial.print(latest_snapshot.left_imu.m.y); Serial.print(", ");
+    Serial.print(latest_snapshot.left_imu.m.z); Serial.print(", ");
 
-    Serial.print(latest_snapshot.right_imu.a.x); Serial.print(",");
-    Serial.print(latest_snapshot.right_imu.a.y); Serial.print(",");
-    Serial.print(latest_snapshot.right_imu.a.z); Serial.print(",");
-    Serial.print(latest_snapshot.right_imu.g.x); Serial.print(",");
-    Serial.print(latest_snapshot.right_imu.g.y); Serial.print(",");
-    Serial.print(latest_snapshot.right_imu.g.z); Serial.print(",");
-    Serial.print(latest_snapshot.right_imu.m.x); Serial.print(",");
-    Serial.print(latest_snapshot.right_imu.m.y); Serial.print(",");
+    Serial.print(latest_snapshot.right_imu.a.x); Serial.print(", ");
+    Serial.print(latest_snapshot.right_imu.a.y); Serial.print(", ");
+    Serial.print(latest_snapshot.right_imu.a.z); Serial.print(", ");
+    Serial.print(latest_snapshot.right_imu.g.x); Serial.print(", ");
+    Serial.print(latest_snapshot.right_imu.g.y); Serial.print(", ");
+    Serial.print(latest_snapshot.right_imu.g.z); Serial.print(", ");
+    Serial.print(latest_snapshot.right_imu.m.x); Serial.print(", ");
+    Serial.print(latest_snapshot.right_imu.m.y); Serial.print(", ");
     Serial.print(latest_snapshot.right_imu.m.z);
     Serial.println("");
 
