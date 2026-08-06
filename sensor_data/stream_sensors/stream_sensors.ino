@@ -229,7 +229,7 @@ void loop() {
     latest_snapshot.left_imu.g.z = imu6_left.g.z * imu_sensitivity;
   }
   
-  if (imu_mag_left.readReg(LIS3MDL::STATUS_REG) & 0b00001000 == 0b00001000)){
+  if (imu_mag_left.readReg(LIS3MDL::STATUS_REG) & 0b00001000 == 0b00001000){
     imu_mag_left.read();
     latest_snapshot.left_imu.m.x = imu_mag_left.m.x;
     latest_snapshot.left_imu.m.y = imu_mag_left.m.y;
@@ -246,7 +246,7 @@ void loop() {
     latest_snapshot.right_imu.g.z = imu6_right.g.z * imu_sensitivity;
   }
   
-  if (imu_mag_right.readReg(LIS3MDL::STATUS_REG) & 0b00001000 == 0b00001000)){
+  if (imu_mag_right.readReg(LIS3MDL::STATUS_REG) & 0b00001000 == 0b00001000){
     imu_mag_right.read();
     latest_snapshot.right_imu.m.x = imu_mag_right.m.x;
     latest_snapshot.right_imu.m.y = imu_mag_right.m.y;
