@@ -219,33 +219,40 @@ void loop() {
 
   }
 
-  if (imu6_left.readReg((LSM6::STATUS_REG) & 0b00000011) && (imu_mag_left.readReg(LIS3MDL::STATUS_REG) & 0b00001111)){
+  if (imu6_left.readReg((LSM6::STATUS_REG)) & 0b00000011 == 0b00000011){
     imu6_left.read();
-    imu_mag_left.read();
     latest_snapshot.left_imu.a.x = imu6_left.a.x;
     latest_snapshot.left_imu.a.y = imu6_left.a.y;
     latest_snapshot.left_imu.a.z = imu6_left.a.z;
     latest_snapshot.left_imu.g.x = imu6_left.g.x * imu_sensitivity;
     latest_snapshot.left_imu.g.y = imu6_left.g.y * imu_sensitivity;
     latest_snapshot.left_imu.g.z = imu6_left.g.z * imu_sensitivity;
+  }
+  
+  if (imu_mag_left.readReg(LIS3MDL::STATUS_REG) & 0b00001000 == 0b00001000)){
+    imu_mag_left.read();
     latest_snapshot.left_imu.m.x = imu_mag_left.m.x;
     latest_snapshot.left_imu.m.y = imu_mag_left.m.y;
     latest_snapshot.left_imu.m.z = imu_mag_left.m.z;
   }
 
-  if (imu6_right.readReg((LSM6::STATUS_REG) & 0b00000011) && (imu_mag_right.readReg(LIS3MDL::STATUS_REG) & 0b00001111)){
+  if (imu6_right.readReg((LSM6::STATUS_REG)) & 0b00000011 == 0b00000011){
     imu6_right.read();
-    imu_mag_right.read();
     latest_snapshot.right_imu.a.x = imu6_right.a.x;
     latest_snapshot.right_imu.a.y = imu6_right.a.y;
     latest_snapshot.right_imu.a.z = imu6_right.a.z;
     latest_snapshot.right_imu.g.x = imu6_right.g.x * imu_sensitivity;
     latest_snapshot.right_imu.g.y = imu6_right.g.y * imu_sensitivity;
     latest_snapshot.right_imu.g.z = imu6_right.g.z * imu_sensitivity;
+  }
+  
+  if (imu_mag_right.readReg(LIS3MDL::STATUS_REG) & 0b00001000 == 0b00001000)){
+    imu_mag_right.read();
     latest_snapshot.right_imu.m.x = imu_mag_right.m.x;
     latest_snapshot.right_imu.m.y = imu_mag_right.m.y;
     latest_snapshot.right_imu.m.z = imu_mag_right.m.z;
   }
+
 
   if (lox_left.dataReady()){
     latest_snapshot.left_distance = lox_left.read(false);
