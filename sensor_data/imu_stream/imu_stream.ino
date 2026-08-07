@@ -36,19 +36,21 @@ void setup() {
 }
 
 void loop() {
-   if (imu6.readReg((LSM6::STATUS_REG) & 0b00000011) && (imu_mag.readReg(LIS3MDL::STATUS_REG) & 0b00001111)){
+
+  
+  if ((imu6.readReg((LSM6::STATUS_REG)) & 0b00000011 == 0b00000011) && (imu_mag.readReg(LIS3MDL::STATUS_REG) & 0b00001000 == 0b00001000)){
       imu6.read();
       imu_mag.read();
       
 
 
-      // Serial.print(millis()); Serial.print(",");
-      // Serial.print(imu6.a.x); Serial.print(",");
-      // Serial.print(imu6.a.y); Serial.print(",");
-      // Serial.print(imu6.a.z); Serial.print(",");
-      // Serial.print(imu6.g.x * sensitivity); Serial.print(",");
-      // Serial.print(imu6.g.y * sensitivity); Serial.print(",");
-      // Serial.print(imu6.g.z * sensitivity); Serial.print(",");
+      Serial.print(millis()); Serial.print(",");
+      Serial.print(imu6.a.x); Serial.print(",");
+      Serial.print(imu6.a.y); Serial.print(",");
+      Serial.print(imu6.a.z); Serial.print(",");
+      Serial.print(imu6.g.x * sensitivity); Serial.print(",");
+      Serial.print(imu6.g.y * sensitivity); Serial.print(",");
+      Serial.print(imu6.g.z * sensitivity); Serial.print(",");
       Serial.print(imu_mag.m.x); Serial.print(",");
       Serial.print(imu_mag.m.y); Serial.print(",");
       Serial.print(imu_mag.m.z);

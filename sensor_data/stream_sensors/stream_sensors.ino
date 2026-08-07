@@ -88,7 +88,7 @@ void setup() {
 
   // IMU setup
   /*LSM6::device_auto, LSM6::sa0_low*/
-  if (!imu6_left.init(LSM6::device_auto, LSM6::sa0_high)) {
+  if (!imu6_left.init(LSM6::device_auto, LSM6::sa0_low)) {
     Serial.println("Failed to detect left LSM6!");
   }
   imu6_left.enableDefault();
@@ -99,7 +99,7 @@ void setup() {
   }
   imu6_right.enableDefault();
 
-  if (!imu_mag_left.init(LIS3MDL::device_auto, LIS3MDL::sa1_high)) {
+  if (!imu_mag_left.init(LIS3MDL::device_auto, LIS3MDL::sa1_low)) {
     Serial.println("Failed to detect left LIS3MDL!");
     while (1);
   }
