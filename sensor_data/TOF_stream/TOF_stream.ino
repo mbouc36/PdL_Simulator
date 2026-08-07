@@ -14,7 +14,7 @@ void setup() {
   Serial.println("Adafruit VL53L0X test");
 
   // Initialize the sensor
-  if (!lox.begin()) {
+  if (!lox.begin(0x29, true)) {
     Serial.println(F("Failed to boot VL53L0X"));
     while (1); // Stay here if the sensor fails to initialize
   }
