@@ -1,72 +1,68 @@
-import socket
 import time
 from collections import deque
 
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
-UDP_IP = "127.0.0.1"
-UDP_PORT = 5005
 MAX_POINTS = 600
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind((UDP_IP, UDP_PORT))
-sock.setblocking(False)
+class SensorVisualization:
+    def __init__(self, max_points=MAX_POINTS):
 
-times = deque(maxlen=MAX_POINTS)
-rolls = deque(maxlen=MAX_POINTS)
-pitches = deque(maxlen=MAX_POINTS)
-yaws = deque(maxlen=MAX_POINTS)
+        self.times = deque(maxlen=max_points)
+        self.rolls = deque(maxlen=max_points)
+        self.pitches = deque(maxlen=max_points)
+        self.yaws = deque(maxlen=max_points)
 
-fig, ax = plt.subplots()
-roll_line, = ax.plot([], [], label="Roll")
-pitch_line, = ax.plot([], [], label="Pitch")
-yaw_line, = ax.plot([], [], label="Yaw")
+        fig, self.ax = plt.subplots()
+        self.roll_line, = self.ax.plot([], [], label="Roll")
+        self.pitch_line, = self.ax.plot([], [], label="Pitch")
+        self.yaw_line, = self.ax.plot([], [], label="Yaw")
 
-ax.set_title("Live IMU Orientation")
-ax.set_xlabel("Time (s)")
-ax.set_ylabel("Angle (degrees)")
-ax.legend()
-ax.grid(True)
+        self.ax.set_title("Live IMU Orientation")
+        self.ax.set_xlabel("Time (s)")
+        self.ax.set_ylabel("Angle (degrees)")
+        self.ax.legend()
+        self.ax.grid(True)
 
-start_time = time.time()
+        self.start_time = time.time()
 
-def update(frame):
-    while True:
-        try:
-            data, _ = sock.recvfrom(1024)
-            t, roll, pitch, yaw = map(float, data.decode().split(","))
-
-            times.append(t - start_time)
-            rolls.append(roll)
-            pitches.append(pitch)
-            yaws.append(yaw)
-
-        except BlockingIOError:
-            break
-
-    if len(times) > 0:
-        roll_line.set_data(times, rolls)
-        pitch_line.set_data(times, pitches)
-        yaw_line.set_data(times, yaws)
-
-        # Dynamic x-axis: show last 3 seconds
-        xmin = max(0, times[-1] - 3)
-        xmax = times[-1] + 0.1
-        ax.set_xlim(xmin, xmax)
-
-        # Dynamic y-axis: include roll, pitch, and yaw
-        all_values = list(rolls) + list(pitches) + list(yaws)
-
-        ymin = min(all_values)
-        ymax = max(all_values)
-
-        padding = max(10, 0.1 * (ymax - ymin))
-
-        ax.set_ylim(ymin - padding, ymax + padding)
-
-    return roll_line, pitch_line, yaw_line
+        self.ani = FuncAnimation(fig, self.update, interval=30)
+        plt.show()
 
 
-ani = FuncAnimation(fig, update, interval=30)
-plt.show()
+    def update(self, data):
+        while True:
+            try:
+                # Data on port should be of form time, roll, pitch, yaw
+                t, roll, pitch, yaw = map(float, data.decode().split(","))
+
+                self.times.append(t - self.start_time)
+                self.rolls.append(roll)
+                self.pitches.append(pitch)
+                self.yaws.append(yaw)
+
+            except BlockingIOError:
+                break
+
+        if len(self.times) > 0:
+            self.roll_line.set_data(self.times, self.rolls)
+            self.pitch_line.set_data(self.times, self.pitches)
+            self.yaw_line.set_data(self.times, self.yaws)
+
+            # Dynamic x-axis: show last 3 seconds
+            xmin = max(0, self.times[-1] - 3)
+            xmax = self.times[-1] + 0.1
+            self.ax.set_xlim(xmin, xmax)
+
+            # Dynamic y-axis: include roll, pitch, and yaw
+            all_values = list(self.rolls) + list(self.pitches) + list(self.yaws)
+
+            ymin = min(all_values)
+            ymax = max(all_values)
+
+            padding = max(10, 0.1 * (ymax - ymin))
+
+            self.ax.set_ylim(ymin - padding, ymax + padding)
+
+        return self.roll_line, self.pitch_line, self.yaw_line

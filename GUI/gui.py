@@ -28,6 +28,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
 from data_processing.imu_angles import BodyRotationTracker
 from data_processing.TOF_stream import TOFManager
+from diagnostics.visualization.view_roll_pitch_yaw import SensorVisualization
 
 config = load_config()
 
@@ -56,7 +57,7 @@ class SurgicalTasks(Enum):
 class DataThread(QThread):
     frame_ready = pyqtSignal(object)
 
-    def __init__(self, folder_name):
+    def __init__(self, folder_name, visualize):
         super().__init__()
         self.running = False
         self.output_folder = os.path.join(OUTPUT_DATA_FOLDER, folder_name)
@@ -71,6 +72,12 @@ class DataThread(QThread):
         self.raw_data_csv = os.path.join(self.output_folder, RAW_SENSOR_CSV)
         self.processed_data_csv = os.path.join(self.output_folder, PROCESSED_DATA_CSV)
         self.frame_idx = 0
+        self.visualize = visualize
+
+        if self.visualize:
+            self.left_motion_data = pyqtSignal(object)
+            self.right_motion_data = pyqtSignal(object)
+            self.weight_data = pyqtSignal(object)
 
         # init serial
         try:
@@ -155,6 +162,12 @@ class DataThread(QThread):
             self.write_to_csv(self.processed_data_csv, processed_data)
             self.write_to_csv(self.raw_data_csv, raw_sensor_data)
 
+            # visualize
+            if self.visualize:
+                self.left_motion_data.emit(arduino_time + left_angles + distances[0])
+                self.right_motion_data.emit(arduino_time + right_angles + distances[1])
+                self.weight_data.emit(load_cell_values)
+
         video_output.release()
         cap.release()
 
@@ -164,7 +177,7 @@ class DataThread(QThread):
 
 
 class GUI(QWidget):
-    def __init__(self, name_to_key_file, test_mode=False):
+    def __init__(self, name_to_key_file, test_mode=False, visualize=False):
         super().__init__()
 
         self.setWindowTitle("GUI with Livestream")
@@ -175,6 +188,7 @@ class GUI(QWidget):
         self.task_type = None
         self.create_name_to_key_file(name_to_key_file)
         self.name_to_key_file = name_to_key_file
+        self.visualize = visualize
 
         self.video_thread = None
         self.pages = QStackedWidget()
@@ -327,7 +341,7 @@ class GUI(QWidget):
         if self.video_thread is not None:
             return
 
-        self.video_thread = DataThread("test")
+        self.video_thread = DataThread(self.key, self.visualize)
         self.video_thread.frame_ready.connect(self.update_video_frame)
         self.video_thread.start()
 
@@ -823,6 +837,11 @@ class GUI(QWidget):
 
         df.to_csv(file_path, index=False)
 
+    def setup_sensor_visualization(self):
+        self.left_visualization_graph = SensorVisualization()
+        
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="A script which loads the gui and parses data from the camera and arduino sensors"
@@ -837,6 +856,13 @@ if __name__ == "__main__":
         type=Path,
         required=True,
         help="Path to the name to key file",
+    )
+
+    parser.add_argument(
+        "-v",
+        "--visualize",
+        action="store_true",
+        help="Visualize data processed from sensors"
     )
 
     args = parser.parse_args()
