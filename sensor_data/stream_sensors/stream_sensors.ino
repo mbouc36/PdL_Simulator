@@ -185,7 +185,7 @@ void loop() {
 
   if (now - last_print >= period_ms) {
     last_print = now;
-    Serial.print(now); Serial.print(", "); Serial.print(", ");
+    Serial.print(now); Serial.print(", "); 
 
     // Load Cells
     Serial.print(latest_snapshot.front_weight); Serial.print(", ");

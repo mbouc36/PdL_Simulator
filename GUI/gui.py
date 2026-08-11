@@ -62,7 +62,6 @@ class DataThread(QThread):
         super().__init__()
         self.running = False
         self.output_folder = os.path.join(OUTPUT_DATA_FOLDER, folder_name)
-
         # Define the folder path
         folder_path = Path(self.output_folder)
 
@@ -75,14 +74,7 @@ class DataThread(QThread):
         self.frame_idx = 0
         self.visualize = visualize
 
-     
-
-        # init serial
-        try:
-            self.ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-        except Exception:
-            print(f"Failed to connect to port: {SERIAL_PORT}")
-            exit(1)
+    
 
     def write_to_csv(self, filen_path, values):
         try:
@@ -98,6 +90,14 @@ class DataThread(QThread):
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = 30.0  # Set a default FPS
+
+
+        desired_width = 1920
+        desired_height = 1080
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, desired_width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, desired_height)
 
         # Define codec and VideoWriter object (uses 'mp4v' for MP4)
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -126,6 +126,7 @@ class DataThread(QThread):
 
             ret, frame = cap.read()
             if not ret:
+                print("Error capturing frame")
                 continue
 
             self.frame_ready.emit(frame)
@@ -347,7 +348,7 @@ class GUI(QWidget):
         self.data_thread = DataThread(self.key, self.visualize)
         self.data_thread.frame_ready.connect(self.update_video_frame)
         if self.visualize:
-            self.data_thread.left_motion_data.connect(self.update_visulization)
+            self.data_thread.sensor_data.connect(self.update_visulization)
         self.data_thread.start()
 
     def update_video_frame(self, frame):
@@ -368,10 +369,7 @@ class GUI(QWidget):
         )
 
     def update_visulization(self, data):
-        # ToF -> 3
-        left_tool_data = data[5:15]
-        self.left_imu_visualization.update(left_tool_data)
-
+        self.left_imu_visualization.update(data[5], data[6], data[7])
 
     def create_new_user_page(self):
         """
@@ -614,11 +612,13 @@ class GUI(QWidget):
         def set_peg_transfer_task():
             self.task_type = SurgicalTasks.PEG_TRANSFER
             self.manage_folders()
+            self.start_video()
             self.pages.setCurrentWidget(self.video_page)
 
         def set_in_suturing_task():
             self.task_type = SurgicalTasks.INTRACORPOREAL_SUTURING
             self.manage_folders()
+            self.start_video()
             self.pages.setCurrentWidget(self.video_page)
 
         peg_transfer_btn.clicked.connect(lambda checked=False: set_peg_transfer_task())
@@ -710,6 +710,8 @@ class GUI(QWidget):
         self.key = self.create_key()
         user_folder_today = Path(os.path.join(todays_folder, self.key))
         task_num = "001"
+
+        print(user_folder_today)
 
         # Create folder for the date and all required children
         if not os.path.exists(todays_folder):
