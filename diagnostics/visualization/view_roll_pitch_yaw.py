@@ -1,68 +1,143 @@
-import time
-from collections import deque
+from PyQt5.QtWidgets import QWidget, QVBoxLayout
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 
-import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
-
-MAX_POINTS = 600
-
-class SensorVisualization:
-    def __init__(self, max_points=MAX_POINTS):
-
-        self.times = deque(maxlen=max_points)
-        self.rolls = deque(maxlen=max_points)
-        self.pitches = deque(maxlen=max_points)
-        self.yaws = deque(maxlen=max_points)
-
-        fig, self.ax = plt.subplots()
-        self.roll_line, = self.ax.plot([], [], label="Roll")
-        self.pitch_line, = self.ax.plot([], [], label="Pitch")
-        self.yaw_line, = self.ax.plot([], [], label="Yaw")
-
-        self.ax.set_title("Live IMU Orientation")
-        self.ax.set_xlabel("Time (s)")
-        self.ax.set_ylabel("Angle (degrees)")
-        self.ax.legend()
-        self.ax.grid(True)
-
-        self.start_time = time.time()
-
-        self.ani = FuncAnimation(fig, self.update, interval=30)
-        plt.show()
+import numpy as np
 
 
-    def update(self, data):
-        while True:
-            try:
-                # Data on port should be of form time, roll, pitch, yaw
-                t, roll, pitch, yaw = map(float, data.decode().split(","))
+class SensorVisualization(QWidget):
 
-                self.times.append(t - self.start_time)
-                self.rolls.append(roll)
-                self.pitches.append(pitch)
-                self.yaws.append(yaw)
+    def __init__(self):
+        super().__init__()
 
-            except BlockingIOError:
-                break
+        # -------------------------
+        # Matplotlib setup
+        # -------------------------
 
-        if len(self.times) > 0:
-            self.roll_line.set_data(self.times, self.rolls)
-            self.pitch_line.set_data(self.times, self.pitches)
-            self.yaw_line.set_data(self.times, self.yaws)
+        self.figure = Figure()
+        self.canvas = FigureCanvasQTAgg(self.figure)
 
-            # Dynamic x-axis: show last 3 seconds
-            xmin = max(0, self.times[-1] - 3)
-            xmax = self.times[-1] + 0.1
-            self.ax.set_xlim(xmin, xmax)
+        self.ax = self.figure.add_subplot(111, projection="3d")
 
-            # Dynamic y-axis: include roll, pitch, and yaw
-            all_values = list(self.rolls) + list(self.pitches) + list(self.yaws)
+        layout = QVBoxLayout()
+        layout.addWidget(self.canvas)
+        self.setLayout(layout)
+        self.setStyleSheet("background-color: white;")
 
-            ymin = min(all_values)
-            ymax = max(all_values)
+        # -------------------------
+        # Define IMU box
+        # -------------------------
 
-            padding = max(10, 0.1 * (ymax - ymin))
+        self.vertices = np.array([
+            [-1.5, -0.8, -0.2],
+            [ 1.5, -0.8, -0.2],
+            [ 1.5,  0.8, -0.2],
+            [-1.5,  0.8, -0.2],
 
-            self.ax.set_ylim(ymin - padding, ymax + padding)
+            [-1.5, -0.8,  0.2],
+            [ 1.5, -0.8,  0.2],
+            [ 1.5,  0.8,  0.2],
+            [-1.5,  0.8,  0.2],
+        ])
 
-        return self.roll_line, self.pitch_line, self.yaw_line
+        self.edges = [
+            (0, 1), (1, 2), (2, 3), (3, 0),
+            (4, 5), (5, 6), (6, 7), (7, 4),
+            (0, 4), (1, 5), (2, 6), (3, 7)
+        ]
+
+        # Create line objects ONCE
+        self.lines = []
+
+        for start, end in self.edges:
+
+            line, = self.ax.plot(
+                [],
+                [],
+                []
+            )
+
+            self.lines.append(line)
+
+        # -------------------------
+        # World frame
+        # -------------------------
+
+        self.ax.set_xlim(-2.5, 2.5)
+        self.ax.set_ylim(-2.5, 2.5)
+        self.ax.set_zlim(-2.5, 2.5)
+
+        self.ax.set_xlabel("X")
+        self.ax.set_ylabel("Y")
+        self.ax.set_zlabel("Z")
+
+        self.ax.set_box_aspect((1, 1, 1))
+
+        self.ax.set_title("IMU Orientation")
+
+        # Initial orientation
+        self.update_orientation(0, 0, 0)
+
+
+    def rotation_matrix(self, roll, pitch, yaw):
+
+        # Degrees -> radians
+        roll = np.radians(roll)
+        pitch = np.radians(pitch)
+        yaw = np.radians(yaw)
+
+        # Roll: X axis
+        Rx = np.array([
+            [1, 0, 0],
+            [0, np.cos(roll), -np.sin(roll)],
+            [0, np.sin(roll),  np.cos(roll)]
+        ])
+
+        # Pitch: Y axis
+        Ry = np.array([
+            [ np.cos(pitch), 0, np.sin(pitch)],
+            [0,              1, 0],
+            [-np.sin(pitch), 0, np.cos(pitch)]
+        ])
+
+        # Yaw: Z axis
+        Rz = np.array([
+            [np.cos(yaw), -np.sin(yaw), 0],
+            [np.sin(yaw),  np.cos(yaw), 0],
+            [0,            0,           1]
+        ])
+
+        # Rotation order
+        return Rz @ Ry @ Rx
+
+
+    def update_orientation(self, roll, pitch, yaw):
+
+        R = self.rotation_matrix(
+            roll,
+            pitch,
+            yaw
+        )
+
+        # Rotate original vertices
+        rotated = self.vertices @ R.T
+
+        # Update each edge
+        for line, (start, end) in zip(
+            self.lines,
+            self.edges
+        ):
+
+            p1 = rotated[start]
+            p2 = rotated[end]
+
+            line.set_data(
+                [p1[0], p2[0]],
+                [p1[1], p2[1]]
+            )
+
+            line.set_3d_properties(
+                [p1[2], p2[2]]
+            )
+
+        self.canvas.draw_idle()

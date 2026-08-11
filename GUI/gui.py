@@ -56,6 +56,7 @@ class SurgicalTasks(Enum):
 
 class DataThread(QThread):
     frame_ready = pyqtSignal(object)
+    sensor_data = pyqtSignal(object)
 
     def __init__(self, folder_name, visualize):
         super().__init__()
@@ -74,10 +75,7 @@ class DataThread(QThread):
         self.frame_idx = 0
         self.visualize = visualize
 
-        if self.visualize:
-            self.left_motion_data = pyqtSignal(object)
-            self.right_motion_data = pyqtSignal(object)
-            self.weight_data = pyqtSignal(object)
+     
 
         # init serial
         try:
@@ -164,9 +162,8 @@ class DataThread(QThread):
 
             # visualize
             if self.visualize:
-                self.left_motion_data.emit(arduino_time + left_angles + distances[0])
-                self.right_motion_data.emit(arduino_time + right_angles + distances[1])
-                self.weight_data.emit(load_cell_values)
+                self.sensor_data.emit(processed_data)
+
 
         video_output.release()
         cap.release()
@@ -190,7 +187,7 @@ class GUI(QWidget):
         self.name_to_key_file = name_to_key_file
         self.visualize = visualize
 
-        self.video_thread = None
+        self.data_thread = None
         self.pages = QStackedWidget()
 
         self.btn_style = """
@@ -319,6 +316,12 @@ class GUI(QWidget):
 
         overlay_layout.addWidget(complete_btn, alignment=Qt.AlignTop | Qt.AlignRight)
         overlay_layout.addStretch()
+        if self.visualize:
+            self.left_imu_visualization = SensorVisualization()
+            self.left_imu_visualization.setFixedSize(400, 300)
+            overlay_layout.addWidget(self.left_imu_visualization, alignment=Qt.AlignBottom | Qt.AlignLeft)
+            
+      
 
         stack_layout.addWidget(self.video_label)
         stack_layout.addWidget(overlay)
@@ -338,12 +341,14 @@ class GUI(QWidget):
             pass
 
     def start_video(self):
-        if self.video_thread is not None:
+        if self.data_thread is not None:
             return
 
-        self.video_thread = DataThread(self.key, self.visualize)
-        self.video_thread.frame_ready.connect(self.update_video_frame)
-        self.video_thread.start()
+        self.data_thread = DataThread(self.key, self.visualize)
+        self.data_thread.frame_ready.connect(self.update_video_frame)
+        if self.visualize:
+            self.data_thread.left_motion_data.connect(self.update_visulization)
+        self.data_thread.start()
 
     def update_video_frame(self, frame):
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -361,6 +366,12 @@ class GUI(QWidget):
                 Qt.KeepAspectRatio,
             )
         )
+
+    def update_visulization(self, data):
+        # ToF -> 3
+        left_tool_data = data[5:15]
+        self.left_imu_visualization.update(left_tool_data)
+
 
     def create_new_user_page(self):
         """
@@ -670,8 +681,8 @@ class GUI(QWidget):
         return post_task_page
 
     def closeEvent(self, event):
-        if self.video_thread is not None:
-            self.video_thread.stop()
+        if self.data_thread is not None:
+            self.data_thread.stop()
 
         event.accept()
 
@@ -868,6 +879,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     app = QApplication(sys.argv)
-    window = GUI(name_to_key_file=args.name_file,test_mode=args.test)
+    window = GUI(name_to_key_file=args.name_file,test_mode=args.test, visualize=args.visualize)
     window.show()
     sys.exit(app.exec())

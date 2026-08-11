@@ -26,10 +26,6 @@ BAUD_RATE = config["baud_rate"]
 FREQUENCY = 180.0
 GAIN = 0.2
 
-# UDP Info
-UDP_IP = "127.0.0.1"
-UDP_PORT = 5005
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 
 class BodyRotationTracker:
@@ -178,8 +174,7 @@ def poll_serial_port():
                 print("Failed to retrived angles")
                 continue
             
-            msg = f"{angles[0].item():.4f}, {angles[1].item():.4f}, {angles[2].item():.4f}"
-            sock.sendto(msg.encode("utf-8"), (UDP_IP, UDP_PORT))
+            msg = f"{angles[0].item():.2f}, {angles[1].item():.2f}, {angles[2].item():.2f}"
             print(msg)
 
     except KeyboardInterrupt:
