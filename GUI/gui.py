@@ -49,6 +49,7 @@ PROCESSED_DATA_CSV = "processed_data.csv"
 NAME_COLUMN = "Name"
 KEY_COLUMN = "Key"
 
+
 class SurgicalTasks(Enum):
     PEG_TRANSFER = 1
     INTRACORPOREAL_SUTURING = 2
@@ -74,8 +75,6 @@ class DataThread(QThread):
         self.frame_idx = 0
         self.visualize = visualize
 
-    
-
     def write_to_csv(self, filen_path, values):
         try:
             with open(filen_path, mode="a", newline="", encoding="utf-8") as file:
@@ -90,7 +89,6 @@ class DataThread(QThread):
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = 30.0  # Set a default FPS
-
 
         desired_width = 1920
         desired_height = 1080
@@ -165,7 +163,6 @@ class DataThread(QThread):
             if self.visualize:
                 self.sensor_data.emit(processed_data)
 
-
         video_output.release()
         cap.release()
 
@@ -183,6 +180,7 @@ class GUI(QWidget):
 
         self.name = ""
         self.key = ""
+        self.output_file = ""
         self.task_type = None
         self.create_name_to_key_file(name_to_key_file)
         self.name_to_key_file = name_to_key_file
@@ -320,9 +318,9 @@ class GUI(QWidget):
         if self.visualize:
             self.left_imu_visualization = SensorVisualization()
             self.left_imu_visualization.setFixedSize(400, 300)
-            overlay_layout.addWidget(self.left_imu_visualization, alignment=Qt.AlignBottom | Qt.AlignLeft)
-            
-      
+            overlay_layout.addWidget(
+                self.left_imu_visualization, alignment=Qt.AlignBottom | Qt.AlignLeft
+            )
 
         stack_layout.addWidget(self.video_label)
         stack_layout.addWidget(overlay)
@@ -342,10 +340,10 @@ class GUI(QWidget):
             pass
 
     def start_video(self):
-        if self.data_thread is not None:
+        if self.data_thread is not None or self.test_mode:
             return
 
-        self.data_thread = DataThread(self.key, self.visualize)
+        self.data_thread = DataThread(self.output_file, self.visualize)
         self.data_thread.frame_ready.connect(self.update_video_frame)
         if self.visualize:
             self.data_thread.sensor_data.connect(self.update_visulization)
@@ -710,6 +708,7 @@ class GUI(QWidget):
         self.key = self.create_key()
         user_folder_today = Path(os.path.join(todays_folder, self.key))
         task_num = "001"
+        self.output_file = user_folder_today
 
         print(user_folder_today)
 
@@ -772,7 +771,7 @@ class GUI(QWidget):
 
         if key in keys.values:
             return False
-        
+
         # TODO: Needs to check also that it is older than the last create key
         dir_path = Path(OUTPUT_DATA_FOLDER)
 
@@ -793,7 +792,7 @@ class GUI(QWidget):
 
         if len(key) == len(last_folder_name):
             return key < last_folder_name
-        
+
         return True
 
     def create_key(self):
@@ -842,8 +841,8 @@ class GUI(QWidget):
             exit(1)
 
         if os.path.exists(file_path):
-            return 
-        
+            return
+
         columns = [NAME_COLUMN, KEY_COLUMN]
 
         df = pd.DataFrame(columns=columns)
@@ -852,7 +851,6 @@ class GUI(QWidget):
 
     def setup_sensor_visualization(self):
         self.left_visualization_graph = SensorVisualization()
-        
 
 
 if __name__ == "__main__":
@@ -875,12 +873,14 @@ if __name__ == "__main__":
         "-v",
         "--visualize",
         action="store_true",
-        help="Visualize data processed from sensors"
+        help="Visualize data processed from sensors",
     )
 
     args = parser.parse_args()
 
     app = QApplication(sys.argv)
-    window = GUI(name_to_key_file=args.name_file,test_mode=args.test, visualize=args.visualize)
+    window = GUI(
+        name_to_key_file=args.name_file, test_mode=args.test, visualize=args.visualize
+    )
     window.show()
     sys.exit(app.exec())
