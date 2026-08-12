@@ -27,10 +27,9 @@ FREQUENCY = 180.0
 GAIN = 0.2
 
 
-
 class BodyRotationTracker:
     def __init__(self, name="left", config_file=CONFIG_FILENAME):
-        self.filter = Madgwick( gain=GAIN)
+        self.filter = Madgwick(gain=GAIN)
         self.q_prev = np.array([1.0, 0.0, 0.0, 0.0])
 
         # Three completely independent accumulated body-frame angles
@@ -60,7 +59,6 @@ class BodyRotationTracker:
             print(f"Failed to find name: {self.name} in {file}")
             exit(1)
 
-
         self.accOffset = data["accOffset"]
         self.accScale = data["accScale"]
         self.gOffset = data["gOffset"]
@@ -71,7 +69,11 @@ class BodyRotationTracker:
         """
         Read Raw Sensor Data and use calibrated values
         """
-        time, ax, ay, az, gx, gy, gz, mx, my, mz = map(float, values)
+        try:
+            time, ax, ay, az, gx, gy, gz, mx, my, mz = map(float, values)
+        except ValueError as e:
+            # TODO convert to warning
+            print(f"Failed to convert to float after time: {time} with error: {e}")
 
         axCal = (ax - self.accOffset["x"]) * self.accScale["x"]
         ayCal = (ay - self.accOffset["y"]) * self.accScale["y"]
@@ -95,14 +97,16 @@ class BodyRotationTracker:
         acc_data = np.array([axCal, ayCal, azCal])
         mag_data = np.array([mxCal, myCal, mzCal])
 
-        dt = (time - self.last_time)/MILLISECOND_TO_SECOND_CONVERSION
+        dt = (time - self.last_time) / MILLISECOND_TO_SECOND_CONVERSION
         self.last_time = time
 
         return dt, gyro_data, acc_data, mag_data
 
     def update(self, dt, gyro, accel, mag):
         # 1. Get the global, drift-corrected quaternion from Madgwick
-        q_curr = self.filter.updateMARG(self.q_prev, gyr=gyro, acc=accel, mag=mag, dt=dt)
+        q_curr = self.filter.updateMARG(
+            self.q_prev, gyr=gyro, acc=accel, mag=mag, dt=dt
+        )
 
         # 2. Isolate the movement strictly to the local body frame
         q_prev_inv = np.array(
@@ -126,7 +130,11 @@ class BodyRotationTracker:
         # Save state for the next frame
         self.q_prev = q_curr
 
-        return round(self.body_x_deg, 4) , round(self.body_y_deg, 4), round(self.body_z_deg, 4)
+        return (
+            round(self.body_x_deg, 4),
+            round(self.body_y_deg, 4),
+            round(self.body_z_deg, 4),
+        )
 
     def get_angles(self, line):
         if type(line) == str:
@@ -173,7 +181,7 @@ def poll_serial_port():
             if angles is None:
                 print("Failed to retrived angles")
                 continue
-            
+
             msg = f"{angles[0].item():.2f}, {angles[1].item():.2f}, {angles[2].item():.2f}"
             print(msg)
 
