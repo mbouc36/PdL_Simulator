@@ -112,6 +112,9 @@ class SensorVisualization(QWidget):
 
 
     def update_orientation(self, roll, pitch, yaw):
+        roll = np.float64(roll)
+        pitch = np.float64(pitch)
+        yaw = np.float64(yaw)
 
         R = self.rotation_matrix(
             roll,
