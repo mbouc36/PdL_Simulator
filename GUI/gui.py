@@ -169,7 +169,7 @@ class GUI(QWidget):
         complete_btn = QPushButton("Complete Task")
         complete_btn.setFixedSize(120, 50)
 
-        def complete_task(self):
+        def complete_task():
             self.data_thread.stop()
             self.pages.setCurrentWidget(self.post_task_page)
 
