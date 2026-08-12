@@ -51,6 +51,20 @@ RAW_SENSOR_CSV_COLUMNS = [
     "Right IMU Mag Z"
 ]
 PROCESSED_DATA_CSV = "processed_data.csv"
+PROCESSED_CSV_COLUMNS = [
+    "Time",
+    "Front Weight",
+    "Back Weight",
+    "Left Surge",
+    "Right Surge",
+    "Left Roll",
+    "Left Pitch",
+    "Left Yaw",
+    "Right Roll",
+    "Right Pitch",
+    "Right Yaw"
+
+]
 
 # CSV File Data
 NAME_COLUMN = "Name"
@@ -73,8 +87,12 @@ class DataThread(QThread):
         self.video_output_path = os.path.join(self.output_folder, VIDEO_FILENAME)
         self.raw_data_csv = os.path.join(self.output_folder, RAW_SENSOR_CSV)
         self.processed_data_csv = os.path.join(self.output_folder, PROCESSED_DATA_CSV)
+        self.write_to_csv(self.raw_data_csv, RAW_SENSOR_CSV_COLUMNS)
+        self.write_to_csv(self.processed_data_csv, PROCESSED_CSV_COLUMNS)
+
         self.frame_idx = 0
         self.visualize = visualize
+        
 
     def write_to_csv(self, filen_path, values):
         try:
@@ -146,6 +164,7 @@ class DataThread(QThread):
             distances = list(tof_manager.get_distances(tof_values))
             left_angles = list(left_imu.get_angles(left_imu_values))
             right_angles = list(right_imu.get_angles(right_imu_values))
+
             # Ensure all values are the same format
             processed_data = (
                 [arduino_time]
