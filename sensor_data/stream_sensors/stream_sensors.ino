@@ -67,15 +67,15 @@ VL53L1X lox_left, lox_right;
 
 
 void calibrate_scale(HX711* scale){
-  Serial.println("Remove all load");
-  delay(3000);
+  Serial.println("Ensure all load is removed");
+  // delay(3000);
 
   scale->set_scale();   
   scale->tare();       
 
   // Serial.println("Tare complete.");
-  Serial.println("Now place the 500 g mass.");
-  delay(5000);
+  // Serial.println("Now place the 500 g mass.");
+  // delay(5000);
 
   scale->set_scale(calibration_factor);
   Serial.println("Loaded calibration factor");
@@ -171,11 +171,9 @@ void setup() {
     while (1);
   }
   Serial.println("Calibrate back scale");
-  delay(3000);
   calibrate_scale(&scale_back);
 
   Serial.println("Calibrate front scale");
-  delay(3000);
   calibrate_scale(&scale_front);
   Serial.println("Ready");
 }
