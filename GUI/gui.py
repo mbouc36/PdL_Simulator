@@ -27,7 +27,6 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from diagnostics.visualization.view_roll_pitch_yaw import SensorVisualization
 from data_thread import DataThread
 
-
 OUTPUT_DATA_FOLDER = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "../output_data"
 )
@@ -40,7 +39,6 @@ KEY_COLUMN = "Key"
 class SurgicalTasks(Enum):
     PEG_TRANSFER = 1
     INTRACORPOREAL_SUTURING = 2
-
 
 
 class GUI(QWidget):
@@ -170,9 +168,12 @@ class GUI(QWidget):
 
         complete_btn = QPushButton("Complete Task")
         complete_btn.setFixedSize(120, 50)
-        complete_btn.clicked.connect(
-            lambda: self.pages.setCurrentWidget(self.post_task_page)
-        )
+
+        def complete_task(self):
+            self.data_thread.stop()
+            self.pages.setCurrentWidget(self.post_task_page)
+
+        complete_btn.clicked.connect(lambda checked=False: complete_task())
 
         complete_btn.setStyleSheet("""
             QPushButton {
