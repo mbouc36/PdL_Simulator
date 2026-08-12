@@ -213,13 +213,17 @@ class GUI(QWidget):
             pass
 
     def start_video(self):
-        if self.data_thread is not None or self.test_mode:
-            return
 
-        self.data_thread = DataThread(self.output_file, self.visualize)
-        self.data_thread.frame_ready.connect(self.update_video_frame)
-        if self.visualize:
-            self.data_thread.sensor_data.connect(self.update_visulization)
+        # If in test mode don't create data thread
+        if self.test_mode:
+            return
+        
+        if self.data_thread is None:
+            self.data_thread = DataThread(self.output_file, self.visualize)
+            self.data_thread.frame_ready.connect(self.update_video_frame)
+            if self.visualize:
+                self.data_thread.sensor_data.connect(self.update_visulization)
+                
         self.data_thread.start()
 
     def update_video_frame(self, frame):
