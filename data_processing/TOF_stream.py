@@ -80,7 +80,7 @@ class TOFManager:
         if distance <= 0:
             return None
         else:
-            return distance
+            return round(distance, 4)
 
     def parse_tof_line(self, line):
         """

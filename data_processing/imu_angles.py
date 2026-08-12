@@ -126,7 +126,7 @@ class BodyRotationTracker:
         # Save state for the next frame
         self.q_prev = q_curr
 
-        return self.body_x_deg, self.body_y_deg, self.body_z_deg
+        return round(self.body_x_deg, 4) , round(self.body_y_deg, 4), round(self.body_z_deg, 4)
 
     def get_angles(self, line):
         if type(line) == str:
