@@ -217,13 +217,13 @@ class GUI(QWidget):
         # If in test mode don't create data thread
         if self.test_mode:
             return
-        
+
         if self.data_thread is None:
             self.data_thread = DataThread(self.output_file, self.visualize)
             self.data_thread.frame_ready.connect(self.update_video_frame)
             if self.visualize:
                 self.data_thread.sensor_data.connect(self.update_visulization)
-                
+
         self.data_thread.start()
 
     def update_video_frame(self, frame):
@@ -244,7 +244,7 @@ class GUI(QWidget):
         )
 
     def update_visulization(self, data):
-        self.left_imu_visualization.update(data[5], data[6], data[7])
+        self.left_imu_visualization.update_orientation(data[5], data[6], data[7])
 
     def create_new_user_page(self):
         """
