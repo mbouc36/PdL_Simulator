@@ -78,7 +78,7 @@ class TOFManager:
         )
 
         if distance <= 0:
-            return None
+            return -1
         else:
             return round(distance, 4)
 
