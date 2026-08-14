@@ -66,7 +66,7 @@ class TOFManager:
         corrected distance
         """
         if raw_distance is None or raw_distance <= 0:
-            return None
+            return 0
 
         distance = (
             coeff["a5"] * raw_distance**5

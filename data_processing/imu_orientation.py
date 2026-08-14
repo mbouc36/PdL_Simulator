@@ -156,7 +156,7 @@ def poll_serial_port():
                 print("Failed to retrived quaternion")
                 continue
 
-            print(list(quaternion))
+            print([quaternion])
 
     except KeyboardInterrupt:
         print("\nTracking stopped.")
