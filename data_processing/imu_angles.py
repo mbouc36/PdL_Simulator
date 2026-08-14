@@ -107,18 +107,12 @@ class BodyRotationTracker:
             self.q_prev, gyr=gyro, acc=accel, mag=mag, dt=dt
         )
 
-        angles = np.degrees(q2euler(q_curr))
-
         # Save state for the next frame
         self.q_prev = q_curr
 
-        return (
-            round(angles[0], 4),
-            round(angles[1], 4),
-            round(angles[2], 4),
-        )
+        return q_curr
 
-    def get_angles(self, line):
+    def get_quaternion(self, line):
         if type(line) == str:
             values = line.split(",")
         else:
@@ -132,10 +126,10 @@ class BodyRotationTracker:
         dt, gyro, accel, mag = self.get_imu_data(values)
 
         # 2. Feed the vectors into the filter and get the delta-calculated Z angle
-        angles = self.update(dt, gyro, accel, mag)
+        q = self.update(dt, gyro, accel, mag)
 
         # 3. Print or use your perfectly drift-corrected body-frame rotation
-        return angles
+        return q
 
 
 def poll_serial_port():
@@ -159,7 +153,7 @@ def poll_serial_port():
                 print(f"Failed to read line: {e}")
                 continue
 
-            angles = tracker.get_angles(line)
+            angles = tracker.get_quaternion(line)
             if angles is None:
                 print("Failed to retrived angles")
                 continue

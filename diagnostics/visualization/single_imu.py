@@ -3,7 +3,7 @@ import os
 import serial
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QThread, pyqtSignal
-
+from numpy import ndarray
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from update_config import load_config
 from data_processing.imu_angles import BodyRotationTracker
@@ -25,7 +25,7 @@ class VisualizeSingleIMU(SensorVisualization):
 
 
 class SingleIMUData(QThread):
-    angle_data = pyqtSignal(float, float, float)
+    angle_data = pyqtSignal(ndarray)
 
     def __init__(self):
         super().__init__()
@@ -52,16 +52,12 @@ class SingleIMUData(QThread):
                     print(f"Failed to read line: {e}")
                     continue
 
-                angles = tracker.get_angles(line)
-                if angles is None:
+                q = tracker.get_quaternion(line)
+                if q is None:
                     print("Failed to retrived angles")
                     continue
 
-                self.angle_data.emit(
-                  - angles[0].item(), -angles[1].item(), -angles[2].item()
-                )
-                msg = f"{angles[0].item():.2f}, {angles[1].item():.2f}, {angles[2].item():.2f}"
-                #print(msg)
+                self.angle_data.emit(q)
 
         except KeyboardInterrupt:
             print("\nTracking stopped.")
