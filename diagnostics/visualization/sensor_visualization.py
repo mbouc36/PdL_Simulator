@@ -32,7 +32,7 @@ class ToolVisualization(QWidget):
         # Define IMU box
         # -------------------------
 
-        self.vertices = np.array(
+        self.base_vertices = np.array(
             [
                 [-1.5, -0.8, -0.2],
                 [1.5, -0.8, -0.2],
@@ -42,6 +42,14 @@ class ToolVisualization(QWidget):
                 [1.5, -0.8, 0.2],
                 [1.5, 0.8, 0.2],
                 [-1.5, 0.8, 0.2],
+            ]
+        )
+
+        self.base_front_marker = np.array(
+            [
+                1.2,
+                0.6,
+                0.2,
             ]
         )
 
@@ -59,15 +67,6 @@ class ToolVisualization(QWidget):
             (2, 6),
             (3, 7),
         ]
-
-        # Marker on IMU face
-        self.front_marker = np.array(
-            [
-                1.2,
-                0.6,
-                0.2,
-            ]
-        )
 
         (self.marker,) = self.ax.plot(
             [],
@@ -169,27 +168,43 @@ class ToolVisualization(QWidget):
 
         return R
 
+        
     def update_orientation(self, rotation_quaternion, distance):
 
         R = self.quaternion_to_matrix(rotation_quaternion)
 
         # ---------------------------------
-        # Determine translated IMU position
+        # Local +Z direction
         # ---------------------------------
 
-        # Local +Z direction expressed in world coordinates
         z_direction = R @ np.array([0.0, 0.0, 1.0])
 
-        # The +Z face is 0.2 units from the center.
-        # 'distance' represents the distance from the
-        # +Z face to the world origin.
-        center = (distance - 0.2) * z_direction
+        # ---------------------------------
+        # Visual scaling
+        # ---------------------------------
+
+        # Minimum scale keeps the tool its normal size nearby.
+        # As distance increases, scale the box proportionally.
+        visual_scale = max(1.0, abs(distance) / 5.0)
+
+        vertices = self.base_vertices * visual_scale
+        front_marker = self.base_front_marker * visual_scale
+
+        # Thickness of box in the local +Z direction
+        half_thickness = 0.2 * visual_scale
+
+        # ---------------------------------
+        # Position the tool
+        # ---------------------------------
+
+        # Keep the +Z face exactly 'distance' away from origin
+        center = (distance - half_thickness) * z_direction
 
         # ---------------------------------
         # Rotate + translate vertices
         # ---------------------------------
 
-        rotated = self.vertices @ R.T
+        rotated = vertices @ R.T
         translated = rotated + center
 
         # Update edges
@@ -208,10 +223,10 @@ class ToolVisualization(QWidget):
             )
 
         # ---------------------------------
-        # Rotate + translate face marker
+        # Rotate + translate marker
         # ---------------------------------
 
-        marker = R @ self.front_marker
+        marker = R @ front_marker
         marker = marker + center
 
         self.marker.set_data(
@@ -224,13 +239,12 @@ class ToolVisualization(QWidget):
         )
 
         # ---------------------------------
-        # Distance from +Z face to origin
+        # Distance line
         # ---------------------------------
 
-        # Center point of the IMU's +Z face
-        face_center = center + (0.2 * z_direction)
+        # +Z face center
+        face_center = center + half_thickness * z_direction
 
-        # Draw line from world origin to +Z face
         self.distance_line.set_data(
             [0, face_center[0]],
             [0, face_center[1]],
@@ -240,7 +254,7 @@ class ToolVisualization(QWidget):
             [0, face_center[2]]
         )
 
-        # Place distance label halfway along line
+        # Distance label
         midpoint = face_center / 2
 
         self.distance_text.set_position(
@@ -256,10 +270,9 @@ class ToolVisualization(QWidget):
         )
 
         # ---------------------------------
-        # Dynamically scale view
+        # Dynamically scale background
         # ---------------------------------
 
-        # Include IMU and absolute origin
         points = np.vstack(
             [
                 translated,
@@ -270,12 +283,12 @@ class ToolVisualization(QWidget):
         min_vals = points.min(axis=0)
         max_vals = points.max(axis=0)
 
-        padding = 0.5
+        # Padding proportional to current view size
+        padding = max(0.5, abs(distance) * 0.1)
 
         min_vals -= padding
         max_vals += padding
 
-        # Keep equal scale on X, Y and Z
         ranges = max_vals - min_vals
         max_range = max(ranges)
 

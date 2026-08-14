@@ -64,7 +64,7 @@ class SingleIMUData(QThread):
                     print("Failed to retrived quaternion")
                     continue
 
-                self.quaternion_data.emit(q, 5)
+                self.quaternion_data.emit(q, 0)
 
         except KeyboardInterrupt:
             print("\nTracking stopped.")
