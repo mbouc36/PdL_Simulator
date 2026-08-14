@@ -7,10 +7,9 @@ from pathlib import Path
 
 from PyQt5.QtCore import QThread, pyqtSignal
 
-
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
-from data_processing.imu_angles import BodyRotationTracker
+from data_processing.imu_orientation import IMUQuaternionTracker
 from data_processing.TOF_stream import TOFManager
 
 config = load_config()
@@ -48,7 +47,7 @@ RAW_SENSOR_CSV_COLUMNS = [
     "Right IMU Gyro Z",
     "Right IMU Mag X",
     "Right IMU Mag Y",
-    "Right IMU Mag Z"
+    "Right IMU Mag Z",
 ]
 PROCESSED_DATA_CSV = "processed_data.csv"
 PROCESSED_CSV_COLUMNS = [
@@ -62,8 +61,7 @@ PROCESSED_CSV_COLUMNS = [
     "Left Yaw",
     "Right Roll",
     "Right Pitch",
-    "Right Yaw"
-
+    "Right Yaw",
 ]
 
 # CSV File Data
@@ -92,11 +90,15 @@ class DataThread(QThread):
 
         self.frame_idx = 0
         self.visualize = visualize
-        
 
     def write_to_csv(self, filen_path, values):
         try:
-            with open(filen_path, mode="a", newline="", encoding="utf-8",) as file:
+            with open(
+                filen_path,
+                mode="a",
+                newline="",
+                encoding="utf-8",
+            ) as file:
                 writer = csv.writer(file)
                 writer.writerow(values)
         except Exception as e:
@@ -108,7 +110,6 @@ class DataThread(QThread):
         frame_width = 1920
         frame_height = 1080
         fps = 30.0  # Set a default FPS
-
 
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
@@ -122,8 +123,8 @@ class DataThread(QThread):
         )
 
         # Initialize the tracker
-        left_imu = BodyRotationTracker(name="left")
-        right_imu = BodyRotationTracker(name="right")
+        left_imu = IMUQuaternionTracker(name="left")
+        right_imu = IMUQuaternionTracker(name="right")
 
         # Initialize tof manager
         tof_manager = TOFManager()
@@ -162,16 +163,16 @@ class DataThread(QThread):
             right_imu_values = [arduino_time] + raw_sensor_data[14:]
 
             distances = list(tof_manager.get_distances(tof_values))
-            left_angles = list(left_imu.get_quaternion(left_imu_values))
-            right_angles = list(right_imu.get_quaternion(right_imu_values))
+            left_quaternions = list(left_imu.get_quaternion(left_imu_values))
+            right_quaternions = list(right_imu.get_quaternion(right_imu_values))
 
             # Ensure all values are the same format
             processed_data = (
                 [arduino_time]
                 + list(load_cell_values)
                 + distances
-                + left_angles
-                + right_angles
+                + left_quaternions
+                + right_quaternions
             )
 
             # load to csv

@@ -24,7 +24,7 @@ from PyQt5.QtWidgets import (
 )
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from diagnostics.visualization.view_roll_pitch_yaw import SensorVisualization
+from diagnostics.visualization.rotation_visualization import RotationVisualization
 from data_thread import DataThread
 
 OUTPUT_DATA_FOLDER = os.path.join(
@@ -189,7 +189,7 @@ class GUI(QWidget):
         overlay_layout.addWidget(complete_btn, alignment=Qt.AlignTop | Qt.AlignRight)
         overlay_layout.addStretch()
         if self.visualize:
-            self.left_imu_visualization = SensorVisualization()
+            self.left_imu_visualization = RotationVisualization()
             self.left_imu_visualization.setFixedSize(400, 300)
             overlay_layout.addWidget(
                 self.left_imu_visualization, alignment=Qt.AlignBottom | Qt.AlignLeft
@@ -727,7 +727,7 @@ class GUI(QWidget):
         df.to_csv(file_path, index=False)
 
     def setup_sensor_visualization(self):
-        self.left_visualization_graph = SensorVisualization()
+        self.left_visualization_graph = RotationVisualization()
 
 
 if __name__ == "__main__":

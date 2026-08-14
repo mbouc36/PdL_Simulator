@@ -3,11 +3,11 @@ import os
 import serial
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QThread, pyqtSignal
-from numpy import ndarray
+
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from update_config import load_config
-from data_processing.imu_angles import BodyRotationTracker
-from view_roll_pitch_yaw import SensorVisualization
+from data_processing.imu_orientation import IMUQuaternionTracker
+from diagnostics.visualization.rotation_visualization import RotationVisualization
 
 config = load_config()
 
@@ -15,21 +15,21 @@ SERIAL_PORT = config["serial_port"]
 BAUD_RATE = config["baud_rate"]
 
 
-class VisualizeSingleIMU(SensorVisualization):
+class VisualizeSingleIMU(RotationVisualization):
     def __init__(self):
         super().__init__()
 
         self.data_thread = SingleIMUData()
-        self.data_thread.angle_data.connect(self.update_orientation)
+        self.data_thread.quaternion_data.connect(self.update_orientation)
         self.data_thread.start()
 
 
 class SingleIMUData(QThread):
-    angle_data = pyqtSignal(ndarray)
+    quaternion_data = pyqtSignal(list)
 
     def __init__(self):
         super().__init__()
-        #self.visualize_from_serial()
+        # self.visualize_from_serial()
 
     def run(self):
         """
@@ -42,7 +42,7 @@ class SingleIMUData(QThread):
             exit(1)
 
         # Initialize the tracker
-        tracker = BodyRotationTracker()
+        tracker = IMUQuaternionTracker()
 
         try:
             while True:
@@ -54,10 +54,10 @@ class SingleIMUData(QThread):
 
                 q = tracker.get_quaternion(line)
                 if q is None:
-                    print("Failed to retrived angles")
+                    print("Failed to retrived quaternion")
                     continue
 
-                self.angle_data.emit(q)
+                self.quaternion_data.emit(q)
 
         except KeyboardInterrupt:
             print("\nTracking stopped.")

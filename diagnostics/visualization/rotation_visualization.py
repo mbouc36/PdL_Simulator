@@ -1,3 +1,10 @@
+"""
+Author: Michael Boucouvalas
+Date: 2026, Aug 14th
+Version: 2.0
+Description: Class which is used to visualize the quaternions of an IMU
+"""
+
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
@@ -5,7 +12,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 import numpy as np
 
 
-class SensorVisualization(QWidget):
+class RotationVisualization(QWidget):
 
     def __init__(self):
         super().__init__()
@@ -147,9 +154,7 @@ class SensorVisualization(QWidget):
                 [p1[1], p2[1]],
             )
 
-            line.set_3d_properties(
-                [p1[2], p2[2]]
-            )
+            line.set_3d_properties([p1[2], p2[2]])
 
         # Rotate marker
         marker = R @ self.front_marker
@@ -159,8 +164,6 @@ class SensorVisualization(QWidget):
             [marker[1]],
         )
 
-        self.marker.set_3d_properties(
-            [marker[2]]
-        )
+        self.marker.set_3d_properties([marker[2]])
 
         self.canvas.draw_idle()

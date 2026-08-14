@@ -1,20 +1,28 @@
-from PyQt5.QtWidgets import QApplication
+"""
+Author: Michael Boucouvalas
+Date: 2026, Aug 14th
+Version: 1.0
+Description: Class which is used to manually manipulate visualizations of a quaternion
+"""
+
+from PyQt5.QtWidgets import QApplication 
 from PyQt5.QtCore import QThread, pyqtSignal
 from time import sleep
 import sys
 
-from view_roll_pitch_yaw import SensorVisualization
+from rotation_visualization import RotationVisualization
 
-class DisplayThread(SensorVisualization):
+
+class DisplayThread(RotationVisualization):
     def __init__(self, rotations, time_interval=5):
         super().__init__()
         self.data_thread = RotationThread(rotations, time_interval)
-        self.data_thread.angle_data.connect(self.update_orientation)
+        self.data_thread.quaternion_data.connect(self.update_orientation)
         self.data_thread.start()
 
 
 class RotationThread(QThread):
-    angle_data = pyqtSignal(float, float, float)
+    quaternion_data = pyqtSignal(list)
 
     def __init__(self, rotations, time_interval):
         super().__init__()
@@ -30,7 +38,7 @@ class RotationThread(QThread):
         sleep(self.time_interval)
         for rotation in self.rotations:
             print(rotation)
-            self.angle_data.emit(rotation[0], rotation[1], rotation[2])
+            self.quaternion_data.emit(rotation)
             print(f"Performing rotation: {rotation}")
 
             sleep(self.time_interval)
@@ -38,10 +46,9 @@ class RotationThread(QThread):
         print("Completed rotation sequence")
 
 
-
 if __name__ == "__main__":
     # Update list as needed to view rotations
-    rotations = [[88, 0, 0], [88, 45, 0], [88, 0, 0], [88, 0, 45]]
+    rotations = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
 
     app = QApplication(sys.argv)
     window = DisplayThread(rotations=rotations)
