@@ -54,7 +54,7 @@ RAW_SENSOR_CSV_COLUMNS = [
     "Right IMU Gyro Z",
     "Right IMU Mag X",
     "Right IMU Mag Y",
-    "Right IMU Mag Z",
+    "Right IMU Mag Z"
 ]
 PROCESSED_DATA_CSV = "processed_data.csv"
 PROCESSED_CSV_COLUMNS = [
