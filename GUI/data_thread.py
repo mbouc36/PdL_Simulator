@@ -166,8 +166,8 @@ class DataThread(QThread):
             right_imu_values = [arduino_time] + raw_sensor_data[14:]
 
             distances = list(tof_manager.get_distances(tof_values))
-            left_quaternions = list(left_imu.get_quaternion(left_imu_values))
-            right_quaternions = list(right_imu.get_quaternion(right_imu_values))
+            left_quaternions = [left_imu.get_quaternion(left_imu_values)]
+            right_quaternions = [right_imu.get_quaternion(right_imu_values)]
 
             # Ensure all values are the same format
             processed_data = (
