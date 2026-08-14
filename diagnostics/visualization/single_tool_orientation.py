@@ -2,7 +2,7 @@
 Author: Michael Boucouvalas
 Date: 2026, Aug 14th
 Version: 2.0
-Description: Visualize a single IMU's orientation over the seiral port
+Description: Use IMU and ToF distance to get orientation in a quaternion visualization
 """
 
 import sys
@@ -14,7 +14,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from update_config import load_config
 from data_processing.imu_orientation import IMUQuaternionTracker
-from rotation_visualization import RotationVisualization
+from sensor_visualization import ToolVisualization
 
 config = load_config()
 
@@ -22,7 +22,7 @@ SERIAL_PORT = config["serial_port"]
 BAUD_RATE = config["baud_rate"]
 
 
-class VisualizeSingleIMU(RotationVisualization):
+class VisualizeSingleIMU(ToolVisualization):
     def __init__(self):
         super().__init__()
 
@@ -32,7 +32,7 @@ class VisualizeSingleIMU(RotationVisualization):
 
 
 class SingleIMUData(QThread):
-    quaternion_data = pyqtSignal(list)
+    quaternion_data = pyqtSignal(list, int)
 
     def __init__(self):
         super().__init__()
@@ -64,7 +64,7 @@ class SingleIMUData(QThread):
                     print("Failed to retrived quaternion")
                     continue
 
-                self.quaternion_data.emit(q)
+                self.quaternion_data.emit(q, 5)
 
         except KeyboardInterrupt:
             print("\nTracking stopped.")

@@ -24,7 +24,7 @@ from PyQt5.QtWidgets import (
 )
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from diagnostics.visualization.rotation_visualization import RotationVisualization
+from diagnostics.visualization.sensor_visualization import ToolVisualization
 from data_thread import DataThread
 
 OUTPUT_DATA_FOLDER = os.path.join(
@@ -189,7 +189,7 @@ class GUI(QWidget):
         overlay_layout.addWidget(complete_btn, alignment=Qt.AlignTop | Qt.AlignRight)
         overlay_layout.addStretch()
         if self.visualize:
-            self.left_imu_visualization = RotationVisualization()
+            self.left_imu_visualization = ToolVisualization()
             self.left_imu_visualization.setFixedSize(400, 300)
             overlay_layout.addWidget(
                 self.left_imu_visualization, alignment=Qt.AlignBottom | Qt.AlignLeft
@@ -244,7 +244,7 @@ class GUI(QWidget):
         )
 
     def update_visulization(self, data):
-        self.left_imu_visualization.update_orientation(data[5], data[6], data[7])
+        self.left_imu_visualization.update_orientation(data[5], data[3])
 
     def create_new_user_page(self):
         """
