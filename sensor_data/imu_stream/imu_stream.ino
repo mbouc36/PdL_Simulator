@@ -21,7 +21,6 @@ void setup() {
     while (1);
   }
   imu6.enableDefault(); 
-  Serial.print("Allo");
 
 
   if (!imu_mag.init()) {

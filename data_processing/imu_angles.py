@@ -1,11 +1,11 @@
 import serial
-import time
 import json
 import math
-import socket
 import numpy as np
 from ahrs.filters import Madgwick
 from ahrs.common.quaternion import Quaternion
+from ahrs.common.orientation import q2euler
+
 import os
 import sys
 
@@ -23,8 +23,7 @@ config = load_config()
 
 SERIAL_PORT = config["serial_port"]
 BAUD_RATE = config["baud_rate"]
-FREQUENCY = 180.0
-GAIN = 0.2
+GAIN = 0.041
 
 
 class BodyRotationTracker:
@@ -73,7 +72,7 @@ class BodyRotationTracker:
             time, ax, ay, az, gx, gy, gz, mx, my, mz = map(float, values)
         except ValueError as e:
             # TODO convert to warning
-            print(f"Failed to convert to float after time: {time} with error: {e}")
+            print(f"Failed to convert to float with error: {e}")
 
         axCal = (ax - self.accOffset["x"]) * self.accScale["x"]
         ayCal = (ay - self.accOffset["y"]) * self.accScale["y"]
@@ -108,32 +107,15 @@ class BodyRotationTracker:
             self.q_prev, gyr=gyro, acc=accel, mag=mag, dt=dt
         )
 
-        # 2. Isolate the movement strictly to the local body frame
-        q_prev_inv = np.array(
-            [self.q_prev[0], -self.q_prev[1], -self.q_prev[2], -self.q_prev[3]]
-        )
-        delta_q_body = Quaternion(q_prev_inv) * (Quaternion(q_curr))
-
-        w, x, y, z = delta_q_body
-
-        # 3. Extract independent local rotations (Infinitesimal approximation)
-        # Because the time step is 0.01s, these are perfectly decoupled.
-        delta_x = 2.0 * np.arctan2(x, w)
-        delta_y = 2.0 * np.arctan2(y, w)
-        delta_z = 2.0 * np.arctan2(z, w)
-
-        # 4. Accumulate into your independent registers
-        self.body_x_deg += np.degrees(delta_x)
-        self.body_y_deg += np.degrees(delta_y)
-        self.body_z_deg += np.degrees(delta_z)
+        angles = np.degrees(q2euler(q_curr))
 
         # Save state for the next frame
         self.q_prev = q_curr
 
         return (
-            round(self.body_x_deg, 4),
-            round(self.body_y_deg, 4),
-            round(self.body_z_deg, 4),
+            round(angles[0], 4),
+            round(angles[1], 4),
+            round(angles[2], 4),
         )
 
     def get_angles(self, line):
@@ -187,7 +169,6 @@ def poll_serial_port():
 
     except KeyboardInterrupt:
         print("\nTracking stopped.")
-
 
 if __name__ == "__main__":
     poll_serial_port()
