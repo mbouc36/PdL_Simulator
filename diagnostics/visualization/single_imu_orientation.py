@@ -1,3 +1,10 @@
+"""
+Author: Michael Boucouvalas
+Date: 2026, Aug 14th
+Version: 2.0
+Description: Visualize a single IMU's orientation over the seiral port
+"""
+
 import sys
 import os
 import serial
@@ -6,8 +13,8 @@ from PyQt5.QtCore import QThread, pyqtSignal
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from update_config import load_config
-from data_processing.imu_angles import BodyRotationTracker
-from view_roll_pitch_yaw import SensorVisualization
+from data_processing.imu_orientation import IMUQuaternionTracker
+from rotation_visualization import RotationVisualization
 
 config = load_config()
 
@@ -15,21 +22,21 @@ SERIAL_PORT = config["serial_port"]
 BAUD_RATE = config["baud_rate"]
 
 
-class VisualizeSingleIMU(SensorVisualization):
+class VisualizeSingleIMU(RotationVisualization):
     def __init__(self):
         super().__init__()
 
         self.data_thread = SingleIMUData()
-        self.data_thread.angle_data.connect(self.update_orientation)
+        self.data_thread.quaternion_data.connect(self.update_orientation)
         self.data_thread.start()
 
 
 class SingleIMUData(QThread):
-    angle_data = pyqtSignal(float, float, float)
+    quaternion_data = pyqtSignal(list)
 
     def __init__(self):
         super().__init__()
-        #self.visualize_from_serial()
+        # self.visualize_from_serial()
 
     def run(self):
         """
@@ -42,7 +49,7 @@ class SingleIMUData(QThread):
             exit(1)
 
         # Initialize the tracker
-        tracker = BodyRotationTracker()
+        tracker = IMUQuaternionTracker()
 
         try:
             while True:
@@ -52,16 +59,12 @@ class SingleIMUData(QThread):
                     print(f"Failed to read line: {e}")
                     continue
 
-                angles = tracker.get_angles(line)
-                if angles is None:
-                    print("Failed to retrived angles")
+                q = tracker.get_quaternion(line)
+                if q is None:
+                    print("Failed to retrived quaternion")
                     continue
 
-                self.angle_data.emit(
-                  - angles[0].item(), -angles[1].item(), -angles[2].item()
-                )
-                msg = f"{angles[0].item():.2f}, {angles[1].item():.2f}, {angles[2].item():.2f}"
-                #print(msg)
+                self.quaternion_data.emit(q)
 
         except KeyboardInterrupt:
             print("\nTracking stopped.")

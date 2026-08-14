@@ -1,10 +1,15 @@
+"""
+Author: Michael Boucouvalas
+Date: 2026, Aug 14th
+Version: 2.0
+Description: Compute an IMU's orientation based on it's configuration
+"""
+
 import serial
 import json
 import math
 import numpy as np
 from ahrs.filters import Madgwick
-from ahrs.common.quaternion import Quaternion
-from ahrs.common.orientation import q2euler
 
 import os
 import sys
@@ -26,15 +31,10 @@ BAUD_RATE = config["baud_rate"]
 GAIN = 0.041
 
 
-class BodyRotationTracker:
+class IMUQuaternionTracker:
     def __init__(self, name="left", config_file=CONFIG_FILENAME):
         self.filter = Madgwick(gain=GAIN)
-        self.q_prev = np.array([1.0, 0.0, 0.0, 0.0])
-
-        # Three completely independent accumulated body-frame angles
-        self.body_x_deg = 0.0
-        self.body_y_deg = 0.0
-        self.body_z_deg = 0.0
+        self.q = np.array([1.0, 0.0, 0.0, 0.0])
 
         self.accOffset = None
         self.accScale = None
@@ -101,24 +101,15 @@ class BodyRotationTracker:
 
         return dt, gyro_data, acc_data, mag_data
 
-    def update(self, dt, gyro, accel, mag):
-        # 1. Get the global, drift-corrected quaternion from Madgwick
-        q_curr = self.filter.updateMARG(
-            self.q_prev, gyr=gyro, acc=accel, mag=mag, dt=dt
-        )
+    def update(self, dt, gyro, accel, mag) -> np.ndarray:
+        """
+        Use sensor data to compute current quaternion
+        """
+        self.q = self.filter.updateMARG(self.q, gyr=gyro, acc=accel, mag=mag, dt=dt)
 
-        angles = np.degrees(q2euler(q_curr))
+        return self.q
 
-        # Save state for the next frame
-        self.q_prev = q_curr
-
-        return (
-            round(angles[0], 4),
-            round(angles[1], 4),
-            round(angles[2], 4),
-        )
-
-    def get_angles(self, line):
+    def get_quaternion(self, line):
         if type(line) == str:
             values = line.split(",")
         else:
@@ -128,19 +119,20 @@ class BodyRotationTracker:
             print("Incorrect number of variables passed")
             return
 
-        # 1. Grab the fresh data from the IMU
+        # Get raw data from IMU
         dt, gyro, accel, mag = self.get_imu_data(values)
 
-        # 2. Feed the vectors into the filter and get the delta-calculated Z angle
-        angles = self.update(dt, gyro, accel, mag)
+        # Calculate quaternion
+        q = self.update(dt, gyro, accel, mag)
 
-        # 3. Print or use your perfectly drift-corrected body-frame rotation
-        return angles
+        q = [round(float(value), 5) for value in q ]
+
+        return q
 
 
 def poll_serial_port():
     """
-    Function which reads serial port and prints angles
+    Function which reads serial port and prints quaternions
     """
     try:
         ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
@@ -149,7 +141,7 @@ def poll_serial_port():
         exit(1)
 
     # Initialize the tracker
-    tracker = BodyRotationTracker()
+    tracker = IMUQuaternionTracker()
 
     try:
         while True:
@@ -159,16 +151,16 @@ def poll_serial_port():
                 print(f"Failed to read line: {e}")
                 continue
 
-            angles = tracker.get_angles(line)
-            if angles is None:
-                print("Failed to retrived angles")
+            quaternion = tracker.get_quaternion(line)
+            if quaternion is None:
+                print("Failed to retrived quaternion")
                 continue
 
-            msg = f"{angles[0].item():.2f}, {angles[1].item():.2f}, {angles[2].item():.2f}"
-            print(msg)
+            print(list(quaternion))
 
     except KeyboardInterrupt:
         print("\nTracking stopped.")
+
 
 if __name__ == "__main__":
     poll_serial_port()
