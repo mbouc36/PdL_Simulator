@@ -1,3 +1,10 @@
+"""
+Author: Michael Boucouvalas
+Date: 2026, Aug 14th
+Version: 2.0
+Description: Get raw data over serial port and camera, process it and save it in csv or video file
+"""
+
 import sys
 import os
 import cv2
@@ -56,12 +63,8 @@ PROCESSED_CSV_COLUMNS = [
     "Back Weight",
     "Left Surge",
     "Right Surge",
-    "Left Roll",
-    "Left Pitch",
-    "Left Yaw",
-    "Right Roll",
-    "Right Pitch",
-    "Right Yaw",
+    "Left Quaternion",
+    "Right Quaternion"
 ]
 
 # CSV File Data

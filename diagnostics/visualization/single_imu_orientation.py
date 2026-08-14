@@ -1,3 +1,10 @@
+"""
+Author: Michael Boucouvalas
+Date: 2026, Aug 14th
+Version: 2.0
+Description: Visualize a single IMU's orientation over the seiral port
+"""
+
 import sys
 import os
 import serial
@@ -7,7 +14,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from update_config import load_config
 from data_processing.imu_orientation import IMUQuaternionTracker
-from diagnostics.visualization.rotation_visualization import RotationVisualization
+from rotation_visualization import RotationVisualization
 
 config = load_config()
 
