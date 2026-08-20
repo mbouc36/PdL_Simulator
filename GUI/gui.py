@@ -1,3 +1,10 @@
+"""
+Author: Michael Boucouvalas
+Date: 2026, Aug 17th
+Version: 2.0
+Description: Script which contains class used to manage gui
+"""
+
 import sys
 import os
 import cv2
@@ -8,11 +15,9 @@ from enum import Enum
 import pandas as pd
 
 
-import argparse
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (
-    QApplication,
     QWidget,
     QPushButton,
     QLabel,
@@ -24,7 +29,7 @@ from PyQt5.QtWidgets import (
 )
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from diagnostics.visualization.sensor_visualization import ToolVisualization
+from diagnostics.visualization.tool_visualization import ToolVisualization
 from data_thread import DataThread
 
 OUTPUT_DATA_FOLDER = os.path.join(
@@ -727,37 +732,4 @@ class GUI(QWidget):
         df.to_csv(file_path, index=False)
 
     def setup_sensor_visualization(self):
-        self.left_visualization_graph = RotationVisualization()
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="A script which loads the gui and parses data from the camera and arduino sensors"
-    )
-    parser.add_argument(
-        "--test", action="store_true", help="Run GUI without sensors and camera"
-    )
-
-    parser.add_argument(
-        "-f",
-        "--name_file",
-        type=Path,
-        required=True,
-        help="Path to the name to key file",
-    )
-
-    parser.add_argument(
-        "-v",
-        "--visualize",
-        action="store_true",
-        help="Visualize data processed from sensors",
-    )
-
-    args = parser.parse_args()
-
-    app = QApplication(sys.argv)
-    window = GUI(
-        name_to_key_file=args.name_file, test_mode=args.test, visualize=args.visualize
-    )
-    window.show()
-    sys.exit(app.exec())
+        self.left_visualization_graph = ToolVisualization()
