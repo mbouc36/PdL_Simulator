@@ -15,13 +15,14 @@ import numpy as np
 
 class ToolVisualization(QWidget):
 
-    def __init__(self):
+    def __init__(self, north_offset=0):
         super().__init__()
 
         self.figure = Figure()
         self.canvas = FigureCanvasQTAgg(self.figure)
 
         self.ax = self.figure.add_subplot(111, projection="3d")
+        self.set_north_offset(north_offset)
 
         layout = QVBoxLayout()
         layout.addWidget(self.canvas)
@@ -123,9 +124,9 @@ class ToolVisualization(QWidget):
         self.ax.set_ylim(-2.5, 2.5)
         self.ax.set_zlim(-2.5, 2.5)
 
-        self.ax.set_xlabel("North")
-        self.ax.set_ylabel("East")
-        self.ax.set_zlabel("Up")
+        self.ax.set_xlabel("X")
+        self.ax.set_ylabel("Y")
+        self.ax.set_zlabel("Z")
 
         self.ax.set_box_aspect((1, 1, 1))
         self.ax.set_title("Tool Orientation")
@@ -133,6 +134,16 @@ class ToolVisualization(QWidget):
         # Identity quaternion:
         # w = 1, x = y = z = 0
         self.update_orientation([1.0, 0.0, 0.0, 0.0], 0.0)
+
+    def set_north_offset(self, north_offset):
+        self.north_offset = north_offset % 360
+
+        self.ax.view_init(
+            elev=25,
+            azim=self.north_offset #- 180
+        )
+
+        self.canvas.draw_idle()
 
     def quaternion_to_matrix(self, q):
         """

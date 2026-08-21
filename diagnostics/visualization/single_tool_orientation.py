@@ -24,7 +24,7 @@ BAUD_RATE = config["baud_rate"]
 
 class VisualizeSingleIMU(ToolVisualization):
     def __init__(self):
-        super().__init__()
+        super().__init__(180)
 
         self.data_thread = SingleIMUData()
         self.data_thread.quaternion_data.connect(self.update_orientation)
