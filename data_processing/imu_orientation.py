@@ -64,15 +64,45 @@ class IMUQuaternionTracker:
         self.magOffset = data["magOffset"]
         self.magScale = data["magScale"]
 
+    def clean_data(self, value):
+        """
+        Cleans a numeric string by removing invalid characters, ensuring there is
+        at most one leading minus sign and one decimal point, then returns it as
+        a float.
+        """
+
+        value = str(value).strip()
+
+        cleaned = []
+        has_decimal = False
+        has_sign = False
+
+        for i, char in enumerate(value):
+            if char.isdigit():
+                cleaned.append(char)
+
+            elif char == "." and not has_decimal:
+                cleaned.append(char)
+                has_decimal = True
+
+            elif char == "-" and i == 0 and not has_sign:
+                cleaned.append(char)
+                has_sign = True
+
+        cleaned = "".join(cleaned)
+
+        # Handle invalid or incomplete numbers
+        if cleaned in ("", "-", ".", "-."):
+            raise ValueError("Input does not contain a valid number.")
+
+        return float(cleaned)
+
+
     def get_imu_data(self, values):
         """
         Read Raw Sensor Data and use calibrated values
         """
-        try:
-            time, ax, ay, az, gx, gy, gz, mx, my, mz = map(float, values)
-        except ValueError as e:
-            # TODO convert to warning
-            print(f"Failed to convert to float with error: {e}")
+        time, ax, ay, az, gx, gy, gz, mx, my, mz = map(self.clean_data, values)
 
         axCal = (ax - self.accOffset["x"]) * self.accScale["x"]
         ayCal = (ay - self.accOffset["y"]) * self.accScale["y"]
@@ -120,7 +150,11 @@ class IMUQuaternionTracker:
             return
 
         # Get raw data from IMU
-        dt, gyro, accel, mag = self.get_imu_data(values)
+        try:
+            dt, gyro, accel, mag = self.get_imu_data(values)
+        except ValueError as e:
+            print(f"Failed to convert to float with error: {e}")
+            return 
 
         # Calculate quaternion
         q = self.update(dt, gyro, accel, mag)
