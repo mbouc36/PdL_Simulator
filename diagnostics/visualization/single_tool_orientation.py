@@ -43,7 +43,7 @@ class SingleIMUData(QThread):
         """
         Visualize the data from the serial port
         """
-        t0, t1, t2, t3 = 0 
+        t0, t1, t2, t3 = 0, 0, 0, 0
         try:
             ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
         except Exception:
@@ -73,10 +73,9 @@ class SingleIMUData(QThread):
 
                 t3 = time.perf_counter()
 
-                print(f"Read: {(t1-t0)*1000:.1f} ms")
-                print(f"Filter: {(t2-t1)*1000:.1f} ms")
-                print(f"Draw: {(t3-t2)*1000:.1f} ms")
-
+                print(
+                    f"Read: {(t1-t0)*1000:.1f} , Filter: {(t2-t1)*1000:.1f} , Draw: {(t3-t2)*1000:.1f} "
+                )
         except KeyboardInterrupt:
             print("\nTracking stopped.")
 
