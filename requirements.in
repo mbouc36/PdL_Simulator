@@ -8,7 +8,6 @@ pyqt5
 ahrs
 scipy
 matplotlib
-cv2
 pygame
-imageio[ffmpeg]
 pandas
+opencv-python
