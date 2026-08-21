@@ -7,6 +7,7 @@ Description: Use IMU and ToF distance to get orientation in a quaternion visuali
 
 import sys
 import os
+import time
 import serial
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -42,6 +43,7 @@ class SingleIMUData(QThread):
         """
         Visualize the data from the serial port
         """
+        t0, t1, t2, t3 = 0 
         try:
             ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
         except Exception:
@@ -54,17 +56,26 @@ class SingleIMUData(QThread):
         try:
             while True:
                 try:
+                    t0 = time.perf_counter()
                     line = ser.readline().decode("utf-8").strip()
                 except Exception as e:
                     print(f"Failed to read line: {e}")
                     continue
 
+                t1 = time.perf_counter()
                 q = tracker.get_quaternion(line)
                 if q is None:
                     print("Failed to retrived quaternion")
                     continue
 
+                t2 = time.perf_counter()
                 self.quaternion_data.emit(q, 0)
+
+                t3 = time.perf_counter()
+
+                print(f"Read: {(t1-t0)*1000:.1f} ms")
+                print(f"Filter: {(t2-t1)*1000:.1f} ms")
+                print(f"Draw: {(t3-t2)*1000:.1f} ms")
 
         except KeyboardInterrupt:
             print("\nTracking stopped.")
