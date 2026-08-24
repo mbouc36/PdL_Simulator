@@ -33,7 +33,7 @@ class VisualizeSingleIMU(ToolVisualization):
 
 
 class SingleIMUData(QThread):
-    quaternion_data = pyqtSignal(list, int)
+    quaternion_data = pyqtSignal(list, int, float)
 
     def __init__(self):
         super().__init__()
@@ -69,13 +69,10 @@ class SingleIMUData(QThread):
                     continue
 
                 t2 = time.perf_counter()
-                self.quaternion_data.emit(q, 0)
+                self.quaternion_data.emit(q, 0, t0)
 
-                t3 = time.perf_counter()
 
-                print(
-                    f"Read: {(t1-t0)*1000:.1f} , Filter: {(t2-t1)*1000:.1f} , Draw: {(t3-t2)*1000:.1f} "
-                )
+                #print(f"Read: {(t1-t0)*1000:.1f} , Filter: {(t2-t1)*1000:.1f} , Draw: {(t3-t2)*1000:.1f} ")
         except KeyboardInterrupt:
             print("\nTracking stopped.")
 

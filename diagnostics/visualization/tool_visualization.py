@@ -9,7 +9,7 @@ Description: Class which is used to visualize the quaternions of an IMU and offs
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-
+import time
 import numpy as np
 
 
@@ -133,7 +133,7 @@ class ToolVisualization(QWidget):
 
         # Identity quaternion:
         # w = 1, x = y = z = 0
-        self.update_orientation([1.0, 0.0, 0.0, 0.0], 0.0)
+        self.update_orientation([1.0, 0.0, 0.0, 0.0], 0.0, 0)
 
     def set_north_offset(self, north_offset):
         self.north_offset = north_offset % 360
@@ -180,7 +180,7 @@ class ToolVisualization(QWidget):
         return R
 
         
-    def update_orientation(self, rotation_quaternion, distance):
+    def update_orientation(self, rotation_quaternion, distance, t1):
 
         R = self.quaternion_to_matrix(rotation_quaternion)
 
@@ -322,3 +322,6 @@ class ToolVisualization(QWidget):
         )
 
         self.canvas.draw_idle()
+        t2 = time .perf_counter()
+
+        print(f"Draw time: {t2-t1}")
