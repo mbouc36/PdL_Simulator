@@ -7,9 +7,9 @@ Description: Class which is used to visualize the quaternions of an IMU and offs
 
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
+from PyQt5.QtCore import QTimer
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-import time
 import numpy as np
 
 
@@ -133,7 +133,16 @@ class ToolVisualization(QWidget):
 
         # Identity quaternion:
         # w = 1, x = y = z = 0
-        self.update_orientation([1.0, 0.0, 0.0, 0.0], 0.0, 0)
+
+        self.latest_quaternion = [1.0, 0.0, 0.0, 0.0]
+        self.latest_distance = 0
+        self.update_orientation()
+        self.timer = QTimer(self)
+        # Function to call whenever timer expires
+        self.timer.timeout.connect(self.update_orientation)
+
+        # Start timer: 33 ms ≈ 30 Hz
+        self.timer.start(33)
 
     def set_north_offset(self, north_offset):
         self.north_offset = north_offset % 360
@@ -144,6 +153,10 @@ class ToolVisualization(QWidget):
         )
 
         self.canvas.draw_idle()
+
+    def load_latest_data(self, q, distance):
+        self.latest_quaternion = q
+        self.latest_distance = distance
 
     def quaternion_to_matrix(self, q):
         """
@@ -180,9 +193,9 @@ class ToolVisualization(QWidget):
         return R
 
         
-    def update_orientation(self, rotation_quaternion, distance, t1):
+    def update_orientation(self):
 
-        R = self.quaternion_to_matrix(rotation_quaternion)
+        R = self.quaternion_to_matrix(self.latest_quaternion)
 
         # ---------------------------------
         # Local +Z direction
@@ -196,7 +209,7 @@ class ToolVisualization(QWidget):
 
         # Minimum scale keeps the tool its normal size nearby.
         # As distance increases, scale the box proportionally.
-        visual_scale = max(1.0, abs(distance) / 5.0)
+        visual_scale = max(1.0, abs(self.latest_distance) / 5.0)
 
         vertices = self.base_vertices * visual_scale
         front_marker = self.base_front_marker * visual_scale
@@ -209,7 +222,7 @@ class ToolVisualization(QWidget):
         # ---------------------------------
 
         # Keep the +Z face exactly 'distance' away from origin
-        center = (distance - half_thickness) * z_direction
+        center = (self.latest_distance - half_thickness) * z_direction
 
         # ---------------------------------
         # Rotate + translate vertices
@@ -277,7 +290,7 @@ class ToolVisualization(QWidget):
         )
 
         self.distance_text.set_text(
-            f"{distance:.2f}"
+            f"{self.latest_distance:.2f}"
         )
 
         # ---------------------------------
@@ -295,7 +308,7 @@ class ToolVisualization(QWidget):
         max_vals = points.max(axis=0)
 
         # Padding proportional to current view size
-        padding = max(0.5, abs(distance) * 0.1)
+        padding = max(0.5, abs(self.latest_distance) * 0.1)
 
         min_vals -= padding
         max_vals += padding
@@ -322,6 +335,3 @@ class ToolVisualization(QWidget):
         )
 
         self.canvas.draw_idle()
-        t2 = time .perf_counter()
-
-        print(f"Draw time: {t2-t1}")

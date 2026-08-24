@@ -28,12 +28,12 @@ class VisualizeSingleIMU(ToolVisualization):
         super().__init__(180)
 
         self.data_thread = SingleIMUData()
-        self.data_thread.quaternion_data.connect(self.update_orientation)
+        self.data_thread.quaternion_data.connect(self.load_latest_data)
         self.data_thread.start()
 
 
 class SingleIMUData(QThread):
-    quaternion_data = pyqtSignal(list, int, float)
+    quaternion_data = pyqtSignal(list, int)
 
     def __init__(self):
         super().__init__()
@@ -43,7 +43,6 @@ class SingleIMUData(QThread):
         """
         Visualize the data from the serial port
         """
-        t0, t1, t2, t3 = 0, 0, 0, 0
         try:
             ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
         except Exception:
@@ -56,23 +55,18 @@ class SingleIMUData(QThread):
         try:
             while True:
                 try:
-                    t0 = time.perf_counter()
                     line = ser.readline().decode("utf-8").strip()
                 except Exception as e:
                     print(f"Failed to read line: {e}")
                     continue
 
-                t1 = time.perf_counter()
                 q = tracker.get_quaternion(line)
                 if q is None:
                     print("Failed to retrived quaternion")
                     continue
 
-                t2 = time.perf_counter()
-                self.quaternion_data.emit(q, 0, t0)
+                self.quaternion_data.emit(q, 0)
 
-
-                #print(f"Read: {(t1-t0)*1000:.1f} , Filter: {(t2-t1)*1000:.1f} , Draw: {(t3-t2)*1000:.1f} ")
         except KeyboardInterrupt:
             print("\nTracking stopped.")
 
