@@ -126,7 +126,7 @@ class DataThread(QThread):
         )
 
         # Initialize the tracker
-        left_imu = IMUQuaternionTracker(name="left")
+        left_imu = IMUQuaternionTracker(name="left_test")
         right_imu = IMUQuaternionTracker(name="right")
 
         # Initialize tof manager
@@ -134,7 +134,12 @@ class DataThread(QThread):
 
         ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
         while self.running:
-            # Synchronize everything with serial prints
+
+            ret, frame = cap.read()
+            if not ret:
+                print("Error capturing frame")
+                continue
+
             try:
                 line = ser.readline().decode("utf-8").strip()  # wait till new line
             except Exception as e:
@@ -142,11 +147,6 @@ class DataThread(QThread):
                 continue
 
             if not line:
-                continue
-
-            ret, frame = cap.read()
-            if not ret:
-                print("Error capturing frame")
                 continue
 
             self.frame_ready.emit(frame)

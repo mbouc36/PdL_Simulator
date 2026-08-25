@@ -9,6 +9,7 @@ import sys
 import os
 import cv2
 import csv
+import time
 from pathlib import Path
 from datetime import date
 from enum import Enum
@@ -249,7 +250,8 @@ class GUI(QWidget):
         )
 
     def update_visulization(self, data):
-        self.left_imu_visualization.update_orientation(data[5], data[3])
+        data_time = time.perf_counter()
+        self.left_imu_visualization.load_latest_data(data[5], 0, data_time)
 
     def create_new_user_page(self):
         """
@@ -730,6 +732,3 @@ class GUI(QWidget):
         df = pd.DataFrame(columns=columns)
 
         df.to_csv(file_path, index=False)
-
-    def setup_sensor_visualization(self):
-        self.left_visualization_graph = ToolVisualization()

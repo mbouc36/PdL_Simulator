@@ -6,7 +6,7 @@ Description: Class which is used to visualize the quaternions of an IMU and offs
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
-from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import QTimer, Qt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 import time
@@ -138,13 +138,14 @@ class ToolVisualization(QWidget):
         self.latest_distance = 0
         self.data_age = 0
 
+        self.timer_start = time.perf_counter()
         self.update_orientation()
         self.timer = QTimer(self)
+        self.timer.setTimerType(Qt.TimerType.PreciseTimer)
         # Function to call whenever timer expires
         self.timer.timeout.connect(self.update_orientation)
-        self.timer_start = time.perf_counter()
         # Start timer: 33 ms ≈ 30 Hz
-        self.timer.start(33)
+        self.timer.start(200)
 
     def set_north_offset(self, north_offset):
         self.north_offset = north_offset % 360
@@ -312,11 +313,13 @@ class ToolVisualization(QWidget):
 
         self.ax.set_zlim(midpoints[2] - half_range, midpoints[2] + half_range)
 
-        self.canvas.draw_idle()
+        self.canvas.draw()
         function_end_time = time.perf_counter()
 
+        timer_time = (function_start_time - self.timer_start) * 1000
+        function_time = (function_end_time - function_start_time ) * 1000
         print(
-            f"Timer: {self.timer_start - function_start_time}, Function time: {function_end_time - function_start_time}"
+            f"Timer: {timer_time:2f}, Function time: {function_time:2f}"
         )
 
         self.timer_start = function_start_time
