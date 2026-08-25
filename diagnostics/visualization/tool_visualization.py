@@ -168,7 +168,12 @@ class ToolVisualization(QWidget):
         # Normalize quaternion
         q = q / np.linalg.norm(q)
 
-        w, x, y, z = q
+        try:
+            w, x, y, z = q
+
+        except TypeError as e:
+            print(f"Failed to unpack quaternion: {e}")
+            return 
 
         R = np.array(
             [
