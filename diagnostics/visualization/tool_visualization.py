@@ -5,11 +5,11 @@ Version: 1.0
 Description: Class which is used to visualize the quaternions of an IMU and offset from ToF
 """
 
-
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from PyQt5.QtCore import QTimer
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+import time
 import numpy as np
 
 
@@ -136,27 +136,27 @@ class ToolVisualization(QWidget):
 
         self.latest_quaternion = [1.0, 0.0, 0.0, 0.0]
         self.latest_distance = 0
+        self.data_age = 0
+
         self.update_orientation()
         self.timer = QTimer(self)
         # Function to call whenever timer expires
         self.timer.timeout.connect(self.update_orientation)
-
+        self.timer_start = time.perf_counter()
         # Start timer: 33 ms ≈ 30 Hz
         self.timer.start(33)
 
     def set_north_offset(self, north_offset):
         self.north_offset = north_offset % 360
 
-        self.ax.view_init(
-            elev=25,
-            azim=self.north_offset #- 180
-        )
+        self.ax.view_init(elev=25, azim=self.north_offset)  # - 180
 
         self.canvas.draw_idle()
 
-    def load_latest_data(self, q, distance):
+    def load_latest_data(self, q, distance, data_age):
         self.latest_quaternion = q
         self.latest_distance = distance
+        self.data_age = data_age
 
     def quaternion_to_matrix(self, q):
         """
@@ -173,7 +173,7 @@ class ToolVisualization(QWidget):
 
         except TypeError as e:
             print(f"Failed to unpack quaternion: {e}")
-            return 
+            return
 
         R = np.array(
             [
@@ -197,9 +197,8 @@ class ToolVisualization(QWidget):
 
         return R
 
-        
     def update_orientation(self):
-
+        function_start_time = time.perf_counter()
         R = self.quaternion_to_matrix(self.latest_quaternion)
 
         # ---------------------------------
@@ -247,9 +246,7 @@ class ToolVisualization(QWidget):
                 [p1[1], p2[1]],
             )
 
-            line.set_3d_properties(
-                [p1[2], p2[2]]
-            )
+            line.set_3d_properties([p1[2], p2[2]])
 
         # ---------------------------------
         # Rotate + translate marker
@@ -263,9 +260,7 @@ class ToolVisualization(QWidget):
             [marker[1]],
         )
 
-        self.marker.set_3d_properties(
-            [marker[2]]
-        )
+        self.marker.set_3d_properties([marker[2]])
 
         # ---------------------------------
         # Distance line
@@ -279,35 +274,22 @@ class ToolVisualization(QWidget):
             [0, face_center[1]],
         )
 
-        self.distance_line.set_3d_properties(
-            [0, face_center[2]]
-        )
+        self.distance_line.set_3d_properties([0, face_center[2]])
 
         # Distance label
         midpoint = face_center / 2
 
-        self.distance_text.set_position(
-            (midpoint[0], midpoint[1])
-        )
+        self.distance_text.set_position((midpoint[0], midpoint[1]))
 
-        self.distance_text.set_3d_properties(
-            midpoint[2]
-        )
+        self.distance_text.set_3d_properties(midpoint[2])
 
-        self.distance_text.set_text(
-            f"{self.latest_distance:.2f}"
-        )
+        self.distance_text.set_text(f"{self.latest_distance:.2f}")
 
         # ---------------------------------
         # Dynamically scale background
         # ---------------------------------
 
-        points = np.vstack(
-            [
-                translated,
-                np.array([[0.0, 0.0, 0.0]])
-            ]
-        )
+        points = np.vstack([translated, np.array([[0.0, 0.0, 0.0]])])
 
         min_vals = points.min(axis=0)
         max_vals = points.max(axis=0)
@@ -324,19 +306,17 @@ class ToolVisualization(QWidget):
         midpoints = (max_vals + min_vals) / 2
         half_range = max_range / 2
 
-        self.ax.set_xlim(
-            midpoints[0] - half_range,
-            midpoints[0] + half_range
-        )
+        self.ax.set_xlim(midpoints[0] - half_range, midpoints[0] + half_range)
 
-        self.ax.set_ylim(
-            midpoints[1] - half_range,
-            midpoints[1] + half_range
-        )
+        self.ax.set_ylim(midpoints[1] - half_range, midpoints[1] + half_range)
 
-        self.ax.set_zlim(
-            midpoints[2] - half_range,
-            midpoints[2] + half_range
-        )
+        self.ax.set_zlim(midpoints[2] - half_range, midpoints[2] + half_range)
 
         self.canvas.draw_idle()
+        function_end_time = time.perf_counter()
+
+        print(
+            f"Timer: {self.timer_start - function_start_time}, Function time: {function_end_time - function_start_time}"
+        )
+
+        self.timer_start = function_start_time
