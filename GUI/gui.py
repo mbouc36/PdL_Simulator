@@ -198,12 +198,16 @@ class GUI(QWidget):
             self.left_imu_visualization = ToolVisualization()
             self.right_imu_visualization = ToolVisualization()
             self.left_imu_visualization.setFixedSize(400, 300)
-            overlay_layout.addWidget(
+            self.right_imu_visualization.setFixedSize(400, 300)
+            visualization_box = QHBoxLayout()
+
+            visualization_box.addWidget(
                 self.left_imu_visualization, alignment=Qt.AlignBottom | Qt.AlignLeft
             )
-            overlay_layout.addWidget(
+            visualization_box.addWidget(
                 self.right_imu_visualization, alignment=Qt.AlignBottom | Qt.AlignRight
             )
+            overlay_layout.addWidget(visualization_box)
 
         stack_layout.addWidget(self.video_label)
         stack_layout.addWidget(overlay)

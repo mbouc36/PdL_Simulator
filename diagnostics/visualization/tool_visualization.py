@@ -152,10 +152,9 @@ class ToolVisualization(QWidget):
 
         self.canvas.draw_idle()
 
-    def load_latest_data(self, q, distance, data_age):
+    def load_latest_data(self, q, distance):
         self.latest_quaternion = q
         self.latest_distance = distance
-        self.data_age = data_age
 
     def quaternion_to_matrix(self, q):
         """
