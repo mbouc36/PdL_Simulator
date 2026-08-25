@@ -196,9 +196,13 @@ class GUI(QWidget):
         overlay_layout.addStretch()
         if self.visualize:
             self.left_imu_visualization = ToolVisualization()
+            self.right_imu_visualization = ToolVisualization()
             self.left_imu_visualization.setFixedSize(400, 300)
             overlay_layout.addWidget(
                 self.left_imu_visualization, alignment=Qt.AlignBottom | Qt.AlignLeft
+            )
+            overlay_layout.addWidget(
+                self.right_imu_visualization, alignment=Qt.AlignBottom | Qt.AlignRight
             )
 
         stack_layout.addWidget(self.video_label)
@@ -250,8 +254,8 @@ class GUI(QWidget):
         )
 
     def update_visulization(self, data):
-        data_time = time.perf_counter()
-        self.left_imu_visualization.load_latest_data(data[5], 0, data_time)
+        self.left_imu_visualization.load_latest_data(data[5], 0)
+        self.right_imu_visualization.load_latest_data(data[6], 0)
 
     def create_new_user_page(self):
         """

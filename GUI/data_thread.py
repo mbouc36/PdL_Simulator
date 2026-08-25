@@ -54,7 +54,7 @@ RAW_SENSOR_CSV_COLUMNS = [
     "Right IMU Gyro Z",
     "Right IMU Mag X",
     "Right IMU Mag Y",
-    "Right IMU Mag Z"
+    "Right IMU Mag Z",
 ]
 PROCESSED_DATA_CSV = "processed_data.csv"
 PROCESSED_CSV_COLUMNS = [
@@ -64,12 +64,13 @@ PROCESSED_CSV_COLUMNS = [
     "Left Surge",
     "Right Surge",
     "Left Quaternion",
-    "Right Quaternion"
+    "Right Quaternion",
 ]
 
 # CSV File Data
 NAME_COLUMN = "Name"
 KEY_COLUMN = "Key"
+
 
 class DataThread(QThread):
     frame_ready = pyqtSignal(object)
@@ -126,7 +127,7 @@ class DataThread(QThread):
         )
 
         # Initialize the tracker
-        left_imu = IMUQuaternionTracker(name="left_test")
+        left_imu = IMUQuaternionTracker(name="left")
         right_imu = IMUQuaternionTracker(name="right")
 
         # Initialize tof manager

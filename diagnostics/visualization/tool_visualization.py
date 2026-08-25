@@ -9,8 +9,9 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from PyQt5.QtCore import QTimer, Qt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-import time
 import numpy as np
+
+TIMEOUT_MS = 200
 
 
 class ToolVisualization(QWidget):
@@ -138,14 +139,11 @@ class ToolVisualization(QWidget):
         self.latest_distance = 0
         self.data_age = 0
 
-        self.timer_start = time.perf_counter()
         self.update_orientation()
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.TimerType.PreciseTimer)
-        # Function to call whenever timer expires
         self.timer.timeout.connect(self.update_orientation)
-        # Start timer: 33 ms ≈ 30 Hz
-        self.timer.start(200)
+        self.timer.start(TIMEOUT_MS)
 
     def set_north_offset(self, north_offset):
         self.north_offset = north_offset % 360
@@ -199,7 +197,6 @@ class ToolVisualization(QWidget):
         return R
 
     def update_orientation(self):
-        function_start_time = time.perf_counter()
         R = self.quaternion_to_matrix(self.latest_quaternion)
 
         # ---------------------------------
@@ -314,12 +311,3 @@ class ToolVisualization(QWidget):
         self.ax.set_zlim(midpoints[2] - half_range, midpoints[2] + half_range)
 
         self.canvas.draw()
-        function_end_time = time.perf_counter()
-
-        timer_time = (function_start_time - self.timer_start) * 1000
-        function_time = (function_end_time - function_start_time ) * 1000
-        print(
-            f"Timer: {timer_time:2f}, Function time: {function_time:2f}"
-        )
-
-        self.timer_start = function_start_time
