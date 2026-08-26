@@ -8,7 +8,7 @@ Description: Use IMU and ToF distance to get orientation in a quaternion visuali
 import sys
 import os
 import serial
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout
 from PyQt5.QtCore import QThread, pyqtSignal
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
@@ -24,11 +24,16 @@ BAUD_RATE = config["baud_rate"]
 NORTH_OFFSET = 180
 
 
-class VisualizeSingleIMU:
+class VisualizeDualIMU(QWidget):
     def __init__(self):
+
+        layout = QHBoxLayout(self)
 
         self.left_viz = ToolVisualization(NORTH_OFFSET)
         self.right_viz = ToolVisualization(NORTH_OFFSET)
+
+        layout.addWidget(self.left_viz)
+        layout.addWidget(self.right_viz)
         self.data_thread = DualIMUData()
         self.data_thread.quaternion_data.connect(self.load_data)
         self.data_thread.start()
@@ -79,7 +84,6 @@ class DualIMUData(QThread):
                 if left_q is None:
                     print("Failed to retrived left quaternion")
                     continue
-                
 
                 right_q = right_tracker.get_quaternion(right_imu_values)
                 if right_q is None:
@@ -96,6 +100,6 @@ class DualIMUData(QThread):
 if __name__ == "__main__":
 
     app = QApplication(sys.argv)
-    window = VisualizeSingleIMU()
+    window = VisualizeDualIMU()
     window.show()
     sys.exit(app.exec())
