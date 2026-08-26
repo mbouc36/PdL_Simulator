@@ -26,7 +26,7 @@ NORTH_OFFSET = 180
 
 class VisualizeDualIMU(QWidget):
     def __init__(self):
-
+        super().__init__()
         layout = QHBoxLayout(self)
 
         self.left_viz = ToolVisualization(NORTH_OFFSET)
