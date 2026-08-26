@@ -195,8 +195,8 @@ class GUI(QWidget):
         overlay_layout.addWidget(complete_btn, alignment=Qt.AlignTop | Qt.AlignRight)
         overlay_layout.addStretch()
         if self.visualize:
-            self.left_imu_visualization = ToolVisualization()
-            self.right_imu_visualization = ToolVisualization()
+            self.left_imu_visualization = ToolVisualization(180)
+            self.right_imu_visualization = ToolVisualization(180)
             self.left_imu_visualization.setFixedSize(400, 300)
             self.right_imu_visualization.setFixedSize(400, 300)
             visualization_box = QHBoxLayout()
@@ -207,7 +207,7 @@ class GUI(QWidget):
             visualization_box.addWidget(
                 self.right_imu_visualization, alignment=Qt.AlignBottom | Qt.AlignRight
             )
-            overlay_layout.addWidget(visualization_box)
+            overlay_layout.addLayout(visualization_box)
 
         stack_layout.addWidget(self.video_label)
         stack_layout.addWidget(overlay)
