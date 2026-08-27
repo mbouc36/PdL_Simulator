@@ -24,7 +24,7 @@ BAUD_RATE = config["baud_rate"]
 
 class VisualizeSingleIMU(ToolVisualization):
     def __init__(self):
-        super().__init__(180)
+        super().__init__(0)
 
         self.data_thread = SingleIMUData()
         self.data_thread.quaternion_data.connect(self.load_latest_data)
@@ -49,7 +49,7 @@ class SingleIMUData(QThread):
             exit(1)
 
         # Initialize the tracker
-        tracker = IMUQuaternionTracker("left_test")
+        tracker = IMUQuaternionTracker("right")
 
         try:
             while True:
