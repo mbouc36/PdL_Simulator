@@ -67,15 +67,15 @@ VL53L1X lox_left, lox_right;
 
 
 void calibrate_scale(HX711* scale){
-  Serial.println("Remove all load");
-  delay(3000);
+  Serial.println("Ensure all load is removed");
+  // delay(3000);
 
   scale->set_scale();   
   scale->tare();       
 
   // Serial.println("Tare complete.");
-  Serial.println("Now place the 500 g mass.");
-  delay(5000);
+  // Serial.println("Now place the 500 g mass.");
+  // delay(5000);
 
   scale->set_scale(calibration_factor);
   Serial.println("Loaded calibration factor");
@@ -88,18 +88,18 @@ void setup() {
 
   // IMU setup
   /*LSM6::device_auto, LSM6::sa0_low*/
-  if (!imu6_left.init(LSM6::device_auto, LSM6::sa0_low)) {
+  if (!imu6_left.init()) {
     Serial.println("Failed to detect left LSM6!");
   }
   imu6_left.enableDefault();
 
-  if (!imu6_right.init()) {
+  if (!imu6_right.init(LSM6::device_auto, LSM6::sa0_low)) {
     Serial.println("Failed to detect right LSM6!");
     while (1);
   }
   imu6_right.enableDefault();
 
-  if (!imu_mag_left.init(LIS3MDL::device_auto, LIS3MDL::sa1_low)) {
+  if (!imu_mag_left.init()) {
     Serial.println("Failed to detect left LIS3MDL!");
     while (1);
   }
@@ -109,7 +109,7 @@ void setup() {
   imu_mag_left.writeReg(LIS3MDL::CTRL_REG1, MAG_CTRL_REGISTER); 
 
 
-  if (!imu_mag_right.init()) {
+  if (!imu_mag_right.init(LIS3MDL::device_auto, LIS3MDL::sa1_low)) {
     Serial.println("Failed to detect right LIS3MDL!");
     while (1);
   }
@@ -171,11 +171,9 @@ void setup() {
     while (1);
   }
   Serial.println("Calibrate back scale");
-  delay(3000);
   calibrate_scale(&scale_back);
 
   Serial.println("Calibrate front scale");
-  delay(3000);
   calibrate_scale(&scale_front);
   Serial.println("Ready");
 }
@@ -185,7 +183,7 @@ void loop() {
 
   if (now - last_print >= period_ms) {
     last_print = now;
-    Serial.print(now); Serial.print(", "); Serial.print(", ");
+    Serial.print(now); Serial.print(", "); 
 
     // Load Cells
     Serial.print(latest_snapshot.front_weight); Serial.print(", ");

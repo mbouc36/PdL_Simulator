@@ -66,7 +66,7 @@ class TOFManager:
         corrected distance
         """
         if raw_distance is None or raw_distance <= 0:
-            return None
+            return 0
 
         distance = (
             coeff["a5"] * raw_distance**5
@@ -78,9 +78,9 @@ class TOFManager:
         )
 
         if distance <= 0:
-            return None
+            return -1
         else:
-            return distance
+            return round(distance, 4)
 
     def parse_tof_line(self, line):
         """

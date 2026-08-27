@@ -1,19 +1,24 @@
+"""
+Author: Michael Boucouvalas
+Date: 2026, Aug 17th
+Version: 2.0
+Description: Script which contains class used to manage gui
+"""
+
 import sys
 import os
 import cv2
 import csv
-import serial
+import time
 from pathlib import Path
 from datetime import date
 from enum import Enum
 import pandas as pd
 
 
-import argparse
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (
-    QApplication,
     QWidget,
     QPushButton,
     QLabel,
@@ -25,146 +30,25 @@ from PyQt5.QtWidgets import (
 )
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from update_config import load_config
-from data_processing.imu_angles import BodyRotationTracker
-from data_processing.TOF_stream import TOFManager
-
-config = load_config()
-
-SERIAL_PORT = config["serial_port"]
-BAUD_RATE = config["baud_rate"]
-NUM_SENSOR_OUTPUT_VALUE = 23
-
+from diagnostics.visualization.tool_visualization import ToolVisualization
+from data_thread import DataThread
 
 OUTPUT_DATA_FOLDER = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "../output_data"
 )
 
-VIDEO_FILENAME = "video.mp4"
-RAW_SENSOR_CSV = "raw_sensor_data.csv"
-PROCESSED_DATA_CSV = "processed_data.csv"
-
 # CSV File Data
 NAME_COLUMN = "Name"
 KEY_COLUMN = "Key"
+
 
 class SurgicalTasks(Enum):
     PEG_TRANSFER = 1
     INTRACORPOREAL_SUTURING = 2
 
 
-class DataThread(QThread):
-    frame_ready = pyqtSignal(object)
-
-    def __init__(self, folder_name):
-        super().__init__()
-        self.running = False
-        self.output_folder = os.path.join(OUTPUT_DATA_FOLDER, folder_name)
-
-        # Define the folder path
-        folder_path = Path(self.output_folder)
-
-        # Create the folder safely
-        folder_path.mkdir(parents=True, exist_ok=True)
-
-        self.video_output_path = os.path.join(self.output_folder, VIDEO_FILENAME)
-        self.raw_data_csv = os.path.join(self.output_folder, RAW_SENSOR_CSV)
-        self.processed_data_csv = os.path.join(self.output_folder, PROCESSED_DATA_CSV)
-        self.frame_idx = 0
-
-        # init serial
-        try:
-            self.ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-        except Exception:
-            print(f"Failed to connect to port: {SERIAL_PORT}")
-            exit(1)
-
-    def write_to_csv(self, filen_path, values):
-        try:
-            with open(filen_path, mode="a", newline="", encoding="utf-8") as file:
-                writer = csv.writer(file)
-                writer.writerow(values)
-        except Exception as e:
-            print(f"Failed to write sensor data to csv: {e}")
-
-    def run(self):
-        self.running = True
-        cap = cv2.VideoCapture(0)
-        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = 30.0  # Set a default FPS
-
-        # Define codec and VideoWriter object (uses 'mp4v' for MP4)
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        video_output = cv2.VideoWriter(
-            self.video_output_path, fourcc, fps, (frame_width, frame_height)
-        )
-
-        # Initialize the tracker
-        left_imu = BodyRotationTracker(name="left")
-        right_imu = BodyRotationTracker(name="right")
-
-        # Initialize tof manager
-        tof_manager = TOFManager()
-
-        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-        while self.running:
-            # Synchronize everything with serial prints
-            try:
-                line = ser.readline().decode("utf-8").strip()  # wait till new line
-            except Exception as e:
-                print(e)
-                continue
-
-            if not line:
-                continue
-
-            ret, frame = cap.read()
-            if not ret:
-                continue
-
-            self.frame_ready.emit(frame)
-
-            # Write to video file
-            video_output.write(frame)
-
-            raw_sensor_data = line.split(",")
-            if len(raw_sensor_data) != NUM_SENSOR_OUTPUT_VALUE:
-                print("Invalid line")
-                continue
-
-            arduino_time = raw_sensor_data[0]
-            load_cell_values = raw_sensor_data[1:3]
-            tof_values = raw_sensor_data[3:5]
-            left_imu_values = [arduino_time] + raw_sensor_data[5:14]
-            right_imu_values = [arduino_time] + raw_sensor_data[14:]
-
-            distances = list(tof_manager.get_distances(tof_values))
-            left_angles = list(left_imu.get_angles(left_imu_values))
-            right_angles = list(right_imu.get_angles(right_imu_values))
-            # Ensure all values are the same format
-            processed_data = (
-                [arduino_time]
-                + list(load_cell_values)
-                + distances
-                + left_angles
-                + right_angles
-            )
-
-            # load to csv
-            self.write_to_csv(self.processed_data_csv, processed_data)
-            self.write_to_csv(self.raw_data_csv, raw_sensor_data)
-
-        video_output.release()
-        cap.release()
-
-    def stop(self):
-        self.running = False
-        self.wait()
-
-
 class GUI(QWidget):
-    def __init__(self, name_to_key_file, test_mode=False):
+    def __init__(self, name_to_key_file, test_mode=False, visualize=False):
         super().__init__()
 
         self.setWindowTitle("GUI with Livestream")
@@ -172,11 +56,13 @@ class GUI(QWidget):
 
         self.name = ""
         self.key = ""
+        self.output_file = ""
         self.task_type = None
         self.create_name_to_key_file(name_to_key_file)
         self.name_to_key_file = name_to_key_file
+        self.visualize = visualize
 
-        self.video_thread = None
+        self.data_thread = None
         self.pages = QStackedWidget()
 
         self.btn_style = """
@@ -288,9 +174,12 @@ class GUI(QWidget):
 
         complete_btn = QPushButton("Complete Task")
         complete_btn.setFixedSize(120, 50)
-        complete_btn.clicked.connect(
-            lambda: self.pages.setCurrentWidget(self.post_task_page)
-        )
+
+        def complete_task():
+            self.data_thread.stop()
+            self.pages.setCurrentWidget(self.post_task_page)
+
+        complete_btn.clicked.connect(lambda checked=False: complete_task())
 
         complete_btn.setStyleSheet("""
             QPushButton {
@@ -305,6 +194,20 @@ class GUI(QWidget):
 
         overlay_layout.addWidget(complete_btn, alignment=Qt.AlignTop | Qt.AlignRight)
         overlay_layout.addStretch()
+        if self.visualize:
+            self.left_imu_visualization = ToolVisualization(180)
+            self.right_imu_visualization = ToolVisualization(180)
+            self.left_imu_visualization.setFixedSize(400, 300)
+            self.right_imu_visualization.setFixedSize(400, 300)
+            visualization_box = QHBoxLayout()
+
+            visualization_box.addWidget(
+                self.left_imu_visualization, alignment=Qt.AlignBottom | Qt.AlignLeft
+            )
+            visualization_box.addWidget(
+                self.right_imu_visualization, alignment=Qt.AlignBottom | Qt.AlignRight
+            )
+            overlay_layout.addLayout(visualization_box)
 
         stack_layout.addWidget(self.video_label)
         stack_layout.addWidget(overlay)
@@ -324,12 +227,18 @@ class GUI(QWidget):
             pass
 
     def start_video(self):
-        if self.video_thread is not None:
+
+        # If in test mode don't create data thread
+        if self.test_mode:
             return
 
-        self.video_thread = DataThread("test")
-        self.video_thread.frame_ready.connect(self.update_video_frame)
-        self.video_thread.start()
+        if self.data_thread is None:
+            self.data_thread = DataThread(self.output_file, self.visualize)
+            self.data_thread.frame_ready.connect(self.update_video_frame)
+            if self.visualize:
+                self.data_thread.sensor_data.connect(self.update_visulization)
+
+        self.data_thread.start()
 
     def update_video_frame(self, frame):
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -347,6 +256,10 @@ class GUI(QWidget):
                 Qt.KeepAspectRatio,
             )
         )
+
+    def update_visulization(self, data):
+        self.left_imu_visualization.load_latest_data(data[5], 0)
+        self.right_imu_visualization.load_latest_data(data[6], 0)
 
     def create_new_user_page(self):
         """
@@ -589,11 +502,13 @@ class GUI(QWidget):
         def set_peg_transfer_task():
             self.task_type = SurgicalTasks.PEG_TRANSFER
             self.manage_folders()
+            self.start_video()
             self.pages.setCurrentWidget(self.video_page)
 
         def set_in_suturing_task():
             self.task_type = SurgicalTasks.INTRACORPOREAL_SUTURING
             self.manage_folders()
+            self.start_video()
             self.pages.setCurrentWidget(self.video_page)
 
         peg_transfer_btn.clicked.connect(lambda checked=False: set_peg_transfer_task())
@@ -656,8 +571,8 @@ class GUI(QWidget):
         return post_task_page
 
     def closeEvent(self, event):
-        if self.video_thread is not None:
-            self.video_thread.stop()
+        if self.data_thread is not None:
+            self.data_thread.stop()
 
         event.accept()
 
@@ -685,6 +600,9 @@ class GUI(QWidget):
         self.key = self.create_key()
         user_folder_today = Path(os.path.join(todays_folder, self.key))
         task_num = "001"
+        self.output_file = user_folder_today
+
+        print(user_folder_today)
 
         # Create folder for the date and all required children
         if not os.path.exists(todays_folder):
@@ -745,7 +663,7 @@ class GUI(QWidget):
 
         if key in keys.values:
             return False
-        
+
         # TODO: Needs to check also that it is older than the last create key
         dir_path = Path(OUTPUT_DATA_FOLDER)
 
@@ -766,7 +684,7 @@ class GUI(QWidget):
 
         if len(key) == len(last_folder_name):
             return key < last_folder_name
-        
+
         return True
 
     def create_key(self):
@@ -815,33 +733,10 @@ class GUI(QWidget):
             exit(1)
 
         if os.path.exists(file_path):
-            return 
-        
+            return
+
         columns = [NAME_COLUMN, KEY_COLUMN]
 
         df = pd.DataFrame(columns=columns)
 
         df.to_csv(file_path, index=False)
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="A script which loads the gui and parses data from the camera and arduino sensors"
-    )
-    parser.add_argument(
-        "--test", action="store_true", help="Run GUI without sensors and camera"
-    )
-
-    parser.add_argument(
-        "-f",
-        "--name_file",
-        type=Path,
-        required=True,
-        help="Path to the name to key file",
-    )
-
-    args = parser.parse_args()
-
-    app = QApplication(sys.argv)
-    window = GUI(name_to_key_file=args.name_file,test_mode=args.test)
-    window.show()
-    sys.exit(app.exec())
