@@ -1,10 +1,13 @@
-# Calibration python script for 2 TOF sensors
-# Applies 5th order calibration/offset function and saves coefficients
+# Calibration script for left/right TOF sensor
+# Collects multiple samples at known distances, averages them,
+# fits a polynomial calibration function, and saves the coefficients.
 
+import argparse
+import csv
 import os
 import serial
-import numpy as np
 import sys
+import numpy as np
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from update_config import load_config
@@ -14,103 +17,235 @@ config = load_config()
 PORT = config["serial_port"]
 BAUD = config["baud_rate"]
 
-PARENT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_FILE = os.path.join(PARENT_DIR, "coeff.txt")
-RAW_DATA_FILE = os.path.join(PARENT_DIR, "dual_tof_calibration_data.csv")
+SERIAL_INPUT_LENGTH = 23
+
+# Index of each TOF value in the comma-separated serial data
+LEFT_TOF_INDEX = 3
+RIGHT_TOF_INDEX = 4
 
 POLY_DEGREE = 5
 
-actual = []
-left_sensor_measured = []
-right_sensor_measured = []
+# Known calibration distances in mm
+LEFT_KNOWN_DISTANCES = [
+    50,
+    100,
+    150,
+    200,
+    250,
+    300,
+    400,
+    500,
+    600,
+    700,
+]
 
-ser = serial.Serial(PORT, BAUD, timeout=1)
+RIGHT_KNOWN_DISTANCES = [...]
 
-print("Python serial monitor started.")
-print("Listening for Arduino calibration data...\n")
+PARENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-saving = False
 
-while True:
-    line = ser.readline().decode(errors="ignore").strip()
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Calibrate either the left or right TOF sensor."
+    )
 
-    if not line:
-        continue
+    parser.add_argument(
+        "tof",
+        choices=["left", "right"],
+        help="TOF sensor to calibrate.",
+    )
 
-    print(line)
+    parser.add_argument(
+        "-n",
+        "--samples",
+        type=int,
+        default=100,
+        help="Number of samples to average at each calibration point.",
+    )
 
-    if line == "CALIBRATION_DATA_START":
-        saving = True
-        continue
+    return parser.parse_args()
 
-    if line == "CALIBRATION_DATA_END":
-        saving = False
-        break
 
-    if saving and line.startswith("CAL_DATA,"):
-        parts = line.split(",")
+def read_tof_sample(ser, sensor_index):
+    """
+    Waits for a valid serial line and returns one TOF measurement.
+    """
 
-        if len(parts) != 4:
-            print("Malformed CAL_DATA line ignored:", line)
+    while True:
+        line = ser.readline().decode(errors="ignore").strip()
+
+        if not line:
             continue
 
-        actual_mm = float(parts[1])
-        left_sensor_mm = float(parts[2])
-        right_sensor_mm = float(parts[3])
+        raw_sensor_data = line.split(",")
 
-        actual.append(actual_mm)
-        left_sensor_measured.append(left_sensor_mm)
-        right_sensor_measured.append(right_sensor_mm)
+        if len(raw_sensor_data) != SERIAL_INPUT_LENGTH:
+            continue
 
-ser.close()
+        try:
+            value = float(raw_sensor_data[sensor_index].strip())
+            return value
 
-actual = np.array(actual, dtype=float)
-left_sensor_measured = np.array(left_sensor_measured, dtype=float)
-right_sensor_measured = np.array(right_sensor_measured, dtype=float)
+        except ValueError:
+            continue
 
-if len(actual) < POLY_DEGREE + 1:
-    raise ValueError("Not enough calibration points for a 5th-order polynomial fit.")
 
-# Fit: actual_distance = f(measured_distance)
-left_coeff = np.polyfit(left_sensor_measured, actual, POLY_DEGREE)
-right_coeff = np.polyfit(right_sensor_measured, actual, POLY_DEGREE)
+def capture_average(ser, sensor_index, num_samples):
+    """
+    Captures num_samples TOF measurements and returns their average.
+    """
 
-# np.polyfit returns highest power first:
-# [a5, a4, a3, a2, a1, a0]
-a5_left, a4_left, a3_left, a2_left, a1_left, a0_left = left_coeff
-a5_right, a4_right, a3_right, a2_right, a1_right, a0_right = right_coeff
+    samples = []
 
-with open(RAW_DATA_FILE, "w") as f:
-    f.write("actual_mm,left_measured_mm,right_measured_mm\n")
-    for a, s_left, s_right in zip(actual, left_sensor_measured, right_sensor_measured):
-        f.write(f"{a:.6f},{s_left:.6f},{s_right:.6f}\n")
+    while len(samples) < num_samples:
+        value = read_tof_sample(ser, sensor_index)
 
-with open(OUTPUT_FILE, "w") as f:
-    f.write("LEFT_SENSOR_COEFFICIENTS\n")
-    f.write(f"a5={a5_left:.12e}\n")
-    f.write(f"a4={a4_left:.12e}\n")
-    f.write(f"a3={a3_left:.12e}\n")
-    f.write(f"a2={a2_left:.12e}\n")
-    f.write(f"a1={a1_left:.12e}\n")
-    f.write(f"a0={a0_left:.12e}\n\n")
+        samples.append(value)
 
-    f.write("RIGHT_SENSOR_COEFFICIENTS\n")
-    f.write(f"a5={a5_right:.12e}\n")
-    f.write(f"a4={a4_right:.12e}\n")
-    f.write(f"a3={a3_right:.12e}\n")
-    f.write(f"a2={a2_right:.12e}\n")
-    f.write(f"a1={a1_right:.12e}\n")
-    f.write(f"a0={a0_right:.12e}\n")
+        print(
+            f"\rCollecting samples: {len(samples)}/{num_samples}",
+            end="",
+            flush=True,
+        )
 
-print("\nCalibration complete.")
-print("Raw calibration data saved to:")
-print(RAW_DATA_FILE)
+    print()
 
-print("\nPolynomial coefficients saved to:")
-print(OUTPUT_FILE)
+    samples = np.array(samples, dtype=float)
 
-print("\nLeft sensor coefficients:")
-print(left_coeff)
+    return np.mean(samples)
 
-print("\nRight sensor coefficients:")
-print(right_coeff)
+
+# ---------------------------------------------------------
+# Main
+# ---------------------------------------------------------
+
+
+def main():
+
+    args = parse_args()
+
+    sensor_name = args.tof
+    num_samples = args.samples
+    known_distances = []
+
+    if sensor_name == "left":
+        sensor_index = LEFT_TOF_INDEX
+        known_distances = LEFT_KNOWN_DISTANCES
+    else:
+        sensor_index = RIGHT_TOF_INDEX
+        known_distances = RIGHT_KNOWN_DISTANCES
+
+    output_file = os.path.join(
+        PARENT_DIR,
+        f"{sensor_name}_tof_coeff.txt",
+    )
+
+    raw_data_file = os.path.join(
+        PARENT_DIR,
+        f"{sensor_name}_tof_calibration_data.csv",
+    )
+
+    if len(known_distances) < POLY_DEGREE + 1:
+        raise ValueError(
+            f"At least {POLY_DEGREE + 1} calibration points are required "
+            f"for a {POLY_DEGREE}th-order polynomial."
+        )
+
+    print(f"\nCalibrating {sensor_name.upper()} TOF")
+    print(f"Samples per position: {num_samples}")
+    print(f"Polynomial degree: {POLY_DEGREE}\n")
+
+    ser = serial.Serial(PORT, BAUD, timeout=1)
+
+    # Clear any old serial data
+    ser.reset_input_buffer()
+
+    measured_distances = []
+
+    try:
+
+        for known_distance in known_distances:
+
+            print("\n----------------------------------------")
+            print(f"Measure at known point: {known_distance} mm")
+            input("Press ENTER when the sensor is positioned...")
+
+            # Throw away serial data collected while positioning sensor
+            ser.reset_input_buffer()
+
+            average = capture_average(
+                ser,
+                sensor_index,
+                num_samples,
+            )
+
+            measured_distances.append(average)
+
+            print(f"Known distance:    {known_distance:.2f} mm")
+            print(f"Average measured: {average:.2f} mm")
+            print(f"Error:             {known_distance - average:.2f} mm")
+
+    finally:
+        ser.close()
+
+    actual = np.array(known_distances, dtype=float)
+    measured = np.array(measured_distances, dtype=float)
+
+    coefficients = np.polyfit(
+        measured,
+        actual,
+        POLY_DEGREE,
+    )
+
+    with open(raw_data_file, "w", newline="") as file:
+
+        writer = csv.writer(file)
+
+        writer.writerow(
+            [
+                "actual_mm",
+                "average_measured_mm",
+                "error_mm",
+            ]
+        )
+
+        for actual_distance, measured_distance in zip(actual, measured):
+
+            writer.writerow(
+                [
+                    f"{actual_distance:.6f}",
+                    f"{measured_distance:.6f}",
+                    f"{actual_distance - measured_distance:.6f}",
+                ]
+            )
+
+    with open(output_file, "w") as file:
+
+        file.write(f"{sensor_name.upper()}_SENSOR_COEFFICIENTS\n")
+
+        # np.polyfit returns highest order coefficient first
+        for power, coefficient in zip(
+            range(POLY_DEGREE, -1, -1),
+            coefficients,
+        ):
+            file.write(f"a{power}={coefficient:.12e}\n")
+
+    print("\n========================================")
+    print("Calibration complete")
+    print("========================================")
+
+    print("\nCalibration data saved to:")
+    print(raw_data_file)
+
+    print("\nPolynomial coefficients saved to:")
+    print(output_file)
+
+    print("\nCoefficients:")
+    print(coefficients)
+
+    print("\nPolynomial:")
+    print(np.poly1d(coefficients))
+
+
+if __name__ == "__main__":
+    main()
