@@ -96,13 +96,9 @@ class TOFManager:
                 raw_right = float(line[1])
             
             elif type(line) ==  str:
-                parts = line.split(",")
-                if line.startswith("TOF1:"):
-                    raw_left = float(parts[0].replace("TOF1:", "").strip())
-                    raw_right = float(parts[1].replace("TOF2:", "").strip())
-                else:
-                    raw_left = float(parts[0].strip())
-                    raw_right = float(parts[1].strip())
+                raw_sensor_data = line.split(",")
+                raw_left = float(raw_sensor_data[3])
+                raw_right = float(raw_sensor_data[4])
 
             return raw_left, raw_right
 
@@ -132,6 +128,9 @@ if __name__ == "__main__":
 
         if not line:
             continue
+
+        raw_sensor_data = line.split(",")
+
 
         raw_left, raw_right = tof_manager.parse_tof_line(line)
 
