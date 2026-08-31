@@ -26,18 +26,7 @@ RIGHT_TOF_INDEX = 4
 POLY_DEGREE = 5
 
 # Known calibration distances in mm
-LEFT_KNOWN_DISTANCES = [
-    50,
-    100,
-    150,
-    200,
-    250,
-    300,
-    400,
-    500,
-    600,
-    700,
-]
+LEFT_KNOWN_DISTANCES = [52, 55, 65, 70, 78, 82, 90, 97]
 
 RIGHT_KNOWN_DISTANCES = [...]
 
