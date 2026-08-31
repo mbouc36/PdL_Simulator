@@ -28,7 +28,7 @@ POLY_DEGREE = 5
 # Known calibration distances in mm
 LEFT_KNOWN_DISTANCES = [52, 55, 65, 70, 78, 82, 90, 97]
 
-RIGHT_KNOWN_DISTANCES = [...]
+RIGHT_KNOWN_DISTANCES = [52, 55, 65, 70, 78, 82, 90, 97]
 
 PARENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -39,7 +39,7 @@ def parse_args():
     )
 
     parser.add_argument(
-        "tof",
+        "sensor_selection",
         choices=["left", "right"],
         help="TOF sensor to calibrate.",
     )
@@ -113,7 +113,7 @@ def main():
 
     args = parse_args()
 
-    sensor_name = args.tof
+    sensor_name = args.sensor_selection
     num_samples = args.samples
     known_distances = []
 
