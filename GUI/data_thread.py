@@ -12,7 +12,7 @@ import csv
 import serial
 from pathlib import Path
 
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
@@ -72,6 +72,20 @@ NAME_COLUMN = "Name"
 KEY_COLUMN = "Key"
 
 
+class SharedData:
+    def __init__(self):
+        self.mutex = QMutex()
+        self.latest_value = None
+
+    def set_value(self, value):
+        with QMutexLocker(self.mutex):
+            self.latest_value = value
+
+    def get_value(self):
+        with QMutexLocker(self.mutex):
+            return self.latest_value
+
+
 class DataThread(QThread):
     frame_ready = pyqtSignal(object)
     sensor_data = pyqtSignal(object)
@@ -94,6 +108,9 @@ class DataThread(QThread):
 
         self.frame_idx = 0
         self.visualize = visualize
+
+        self.shm = SharedData()
+        self.serial_thread = SerialThread(self.shm)
 
     def write_to_csv(self, filen_path, values):
         try:
@@ -132,8 +149,8 @@ class DataThread(QThread):
 
         # Initialize tof manager
         tof_manager = TOFManager()
+        self.serial_thread.start()
 
-        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
         while self.running:
 
             ret, frame = cap.read()
@@ -141,25 +158,12 @@ class DataThread(QThread):
                 print("Error capturing frame")
                 continue
 
-            try:
-                line = ser.readline().decode("utf-8").strip()  # wait till new line
-            except Exception as e:
-                print(e)
-                continue
-
-            if not line:
-                continue
-
             self.frame_ready.emit(frame)
 
             # Write to video file
             video_output.write(frame)
 
-            raw_sensor_data = line.split(",")
-            if len(raw_sensor_data) != len(RAW_SENSOR_CSV_COLUMNS):
-                print("Invalid line")
-                continue
-
+            raw_sensor_data = self.shm.get_value()
             arduino_time = raw_sensor_data[0]
             load_cell_values = raw_sensor_data[1:3]
             tof_values = raw_sensor_data[3:5]
@@ -192,4 +196,32 @@ class DataThread(QThread):
 
     def stop(self):
         self.running = False
+        self.serial_thread.running = False
         self.wait()
+
+
+class SerialThread(QThread):
+    def __init__(self, shm: SharedData):
+        self.running = False
+        self.shm = shm
+
+    def run(self):
+        self.running = True
+        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+
+        while self.running:
+            try:
+                line = ser.readline().decode("utf-8").strip()  # wait till new line
+            except Exception as e:
+                print(e)
+                continue
+
+            if not line:
+                continue
+
+            raw_sensor_data = line.split(",")
+            if len(raw_sensor_data) != len(RAW_SENSOR_CSV_COLUMNS):
+                print("Invalid line")
+                continue
+
+            self.shm.set_value(raw_sensor_data)
