@@ -14,7 +14,7 @@ BAUD = config["baud_rate"]
 PARENT_DIR = os.path.dirname(os.path.abspath(__file__))
 COEFF_FILE = os.path.join(PARENT_DIR, "../calibration/tof_calibration/coeff.txt")
 WINDOW_SIZE = 20
-MAX_DISTANCE = 200
+MAX_DISTANCE = 300
 
 
 class TOFManager:
@@ -78,7 +78,7 @@ class TOFManager:
             + coeff["a0"]
         )
 
-        if distance <= 0:
+        if distance < 0:
             return -1
         elif distance > MAX_DISTANCE:
             return MAX_DISTANCE

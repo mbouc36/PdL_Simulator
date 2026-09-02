@@ -26,9 +26,9 @@ RIGHT_TOF_INDEX = 4
 POLY_DEGREE = 5
 
 # Known calibration distances in mm
-LEFT_KNOWN_DISTANCES = [0, 54, 68, 80, 95, 106, 120, 127]
+LEFT_KNOWN_DISTANCES = [4, 54, 68, 80, 95, 106, 120, 127, 125, 136, 148]
 
-RIGHT_KNOWN_DISTANCES = [0, 55, 70, 82, 97, 109, 121, 130]
+RIGHT_KNOWN_DISTANCES = [4, 55, 70, 82, 97, 109, 121, 130, 126, 139, 150]
 
 PARENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
