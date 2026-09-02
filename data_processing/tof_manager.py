@@ -14,6 +14,7 @@ BAUD = config["baud_rate"]
 PARENT_DIR = os.path.dirname(os.path.abspath(__file__))
 COEFF_FILE = os.path.join(PARENT_DIR, "../calibration/tof_calibration/coeff.txt")
 WINDOW_SIZE = 20
+MAX_DISTANCE = 300
 
 
 class TOFManager:
@@ -77,8 +78,10 @@ class TOFManager:
             + coeff["a0"]
         )
 
-        if distance <= 0:
+        if distance < 0:
             return -1
+        elif distance > MAX_DISTANCE:
+            return MAX_DISTANCE
         else:
             return round(distance, 4)
 
@@ -94,15 +97,11 @@ class TOFManager:
             if type(line) == list:
                 raw_left = float(line[0])
                 raw_right = float(line[1])
-            
-            elif type(line) ==  str:
-                parts = line.split(",")
-                if line.startswith("TOF1:"):
-                    raw_left = float(parts[0].replace("TOF1:", "").strip())
-                    raw_right = float(parts[1].replace("TOF2:", "").strip())
-                else:
-                    raw_left = float(parts[0].strip())
-                    raw_right = float(parts[1].strip())
+
+            elif type(line) == str:
+                raw_sensor_data = line.split(",")
+                raw_left = float(raw_sensor_data[3])
+                raw_right = float(raw_sensor_data[4])
 
             return raw_left, raw_right
 
@@ -132,6 +131,8 @@ if __name__ == "__main__":
 
         if not line:
             continue
+
+        raw_sensor_data = line.split(",")
 
         raw_left, raw_right = tof_manager.parse_tof_line(line)
 

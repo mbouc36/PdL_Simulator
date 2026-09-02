@@ -17,7 +17,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
 from data_processing.imu_orientation import IMUQuaternionTracker
-from data_processing.TOF_stream import TOFManager
+from data_processing.tof_manager import TOFManager
 
 config = load_config()
 
