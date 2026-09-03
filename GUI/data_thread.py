@@ -10,6 +10,7 @@ import os
 import cv2
 import csv
 import serial
+from time import sleep
 from pathlib import Path
 
 from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker
@@ -150,6 +151,7 @@ class DataThread(QThread):
         # Initialize tof manager
         tof_manager = TOFManager()
         self.serial_thread.start()
+        sleep(5)
 
         while self.running:
 
@@ -164,6 +166,8 @@ class DataThread(QThread):
             video_output.write(frame)
 
             raw_sensor_data = self.shm.get_value()
+            if raw_sensor_data is None:
+                continue
             arduino_time = raw_sensor_data[0]
             load_cell_values = raw_sensor_data[1:3]
             tof_values = raw_sensor_data[3:5]
@@ -202,6 +206,7 @@ class DataThread(QThread):
 
 class SerialThread(QThread):
     def __init__(self, shm: SharedData):
+        super().__init__()
         self.running = False
         self.shm = shm
 
