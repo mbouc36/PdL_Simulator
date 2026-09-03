@@ -26,7 +26,7 @@ struct Snapshot{
 };
 
 
-#define PRINT_FREQUENCY 30 //Hz
+#define PRINT_FREQUENCY 40 //Hz
 unsigned long now;
 unsigned long last_print;
 const unsigned long period_ms = 1000/PRINT_FREQUENCY;
@@ -154,8 +154,14 @@ void setup() {
   }
   lox_right.setAddress(TOF2_ADDR);
 
-  lox_left.startContinuous(CONTINUOUS_PERIOD);
-  lox_right.startContinuous(CONTINUOUS_PERIOD);
+  lox_left.setDistanceMode(VL53L1X::Short);
+  lox_left.setMeasurementTimingBudget(20000);
+  lox_left.startContinuous(33);
+
+  lox_right.setDistanceMode(VL53L1X::Short);
+  lox_right.setMeasurementTimingBudget(20000);
+  lox_right.startContinuous(33);
+  
   Serial.println("Finished TOF setup");
 
   // Load Cell Setup
