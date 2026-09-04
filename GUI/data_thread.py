@@ -73,6 +73,9 @@ PROCESSED_CSV_COLUMNS = [
 NAME_COLUMN = "Name"
 KEY_COLUMN = "Key"
 
+# Sensor Data
+IMU_INITIALIZATION_TIME = 10 #s
+
 
 class SharedData:
     def __init__(self):
@@ -90,6 +93,7 @@ class SharedData:
 
 class DataThread(QThread):
     frame_ready = pyqtSignal(object)
+    sensors_ready = pyqtSignal(object)
     sensor_data = pyqtSignal(object)
 
     def __init__(self, folder_name, visualize):
@@ -129,6 +133,31 @@ class DataThread(QThread):
 
     def run(self):
         self.running = True
+
+        # Initialize the tracker
+        left_imu = IMUQuaternionTracker(name="left")
+        right_imu = IMUQuaternionTracker(name="right")
+
+        # Initialize tof manager
+        tof_manager = TOFManager()
+        self.serial_thread.start()
+        init_start_time = time.monotonic()
+
+        while time.monotonic() - init_start_time < IMU_INITIALIZATION_TIME:
+            raw_sensor_data = self.shm.get_value()
+            if raw_sensor_data is None:
+                continue
+
+            arduino_time = raw_sensor_data[0]
+            left_imu_values = [arduino_time] + raw_sensor_data[5:14]
+            right_imu_values = [arduino_time] + raw_sensor_data[14:]
+            left_quaternions = [left_imu.get_quaternion(left_imu_values)]
+            right_quaternions = [right_imu.get_quaternion(right_imu_values)]
+
+        left_imu.set_gain()
+        right_imu.set_gain()
+        self.sensors_ready.emit(True)
+
         cap = cv2.VideoCapture(0)
         frame_width = 1920
         frame_height = 1080
@@ -145,14 +174,6 @@ class DataThread(QThread):
             self.video_output_path, fourcc, fps, (frame_width, frame_height)
         )
 
-        # Initialize the tracker
-        left_imu = IMUQuaternionTracker(name="left")
-        right_imu = IMUQuaternionTracker(name="right")
-
-        # Initialize tof manager
-        tof_manager = TOFManager()
-        self.serial_thread.start()
-        time.sleep(5)
 
         while self.running:
 
@@ -204,6 +225,7 @@ class DataThread(QThread):
     def stop(self):
         self.running = False
         self.serial_thread.running = False
+        self.sensors_ready.emit(False)
         self.wait()
 
 

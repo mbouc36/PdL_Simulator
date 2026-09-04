@@ -29,12 +29,12 @@ config = load_config()
 
 SERIAL_PORT = config["serial_port"]
 BAUD_RATE = config["baud_rate"]
-GAIN = 0.041
-
+STARTING_GAIN = 0.8
+SETTLED_GAIN = 0.041
 
 class IMUQuaternionTracker:
     def __init__(self, name="left", config_file=CONFIG_FILENAME):
-        self.filter = Madgwick(gain=GAIN)
+        self.filter = Madgwick(gain=STARTING_GAIN)
         self.q = np.array([1.0, 0.0, 0.0, 0.0])
 
         self.accOffset = None
@@ -163,6 +163,12 @@ class IMUQuaternionTracker:
         q = [round(float(value), 5) for value in q ]
 
         return q
+
+    def set_gain(self, gain=SETTLED_GAIN):
+        """
+        Update gain of madwick filter
+        """
+        self.filter.gain = gain
 
 
 def poll_serial_port():
