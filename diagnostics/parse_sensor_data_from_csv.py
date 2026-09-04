@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-CSV_FILE = "/Users/michaelb/Documents/sensor_data.csv"
+CSV_FILE = "/Users/michaelb/Downloads/sensor_data_2_09.csv"
 SAMPLE_RATE = 1000
 RAW_SENSOR_CSV_COLUMNS = [
     "Front Weight",
@@ -37,7 +37,7 @@ df = df.iloc[::SAMPLE_RATE]
 time = df.iloc[:, 0]
 
 # Remaining 22 columns are measurements
-values = df.iloc[:, 1:3]
+values = df.iloc[:, 1:23]
 
 # Plot
 plt.figure(figsize=(14, 8))

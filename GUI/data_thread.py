@@ -9,8 +9,8 @@ import sys
 import os
 import cv2
 import csv
+import time
 import serial
-from time import sleep
 from pathlib import Path
 
 from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker
@@ -59,7 +59,8 @@ RAW_SENSOR_CSV_COLUMNS = [
 ]
 PROCESSED_DATA_CSV = "processed_data.csv"
 PROCESSED_CSV_COLUMNS = [
-    "Time",
+    "Arduino Time",
+    "Camera Time",
     "Front Weight",
     "Back Weight",
     "Left Surge",
@@ -151,11 +152,12 @@ class DataThread(QThread):
         # Initialize tof manager
         tof_manager = TOFManager()
         self.serial_thread.start()
-        sleep(5)
+        time.sleep(5)
 
         while self.running:
 
             ret, frame = cap.read()
+            camera_time = time.perf_counter()
             if not ret:
                 print("Error capturing frame")
                 continue
@@ -181,6 +183,7 @@ class DataThread(QThread):
             # Ensure all values are the same format
             processed_data = (
                 [arduino_time]
+                + [camera_time]
                 + list(load_cell_values)
                 + distances
                 + left_quaternions
