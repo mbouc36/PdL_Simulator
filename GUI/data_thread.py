@@ -183,14 +183,15 @@ class DataThread(QThread):
                 print("Error capturing frame")
                 continue
 
+            raw_sensor_data = self.shm.get_value()
+            if raw_sensor_data is None:
+                continue
+
             self.frame_ready.emit(frame)
 
             # Write to video file
             video_output.write(frame)
 
-            raw_sensor_data = self.shm.get_value()
-            if raw_sensor_data is None:
-                continue
             arduino_time = raw_sensor_data[0]
             load_cell_values = raw_sensor_data[1:3]
             tof_values = raw_sensor_data[3:5]

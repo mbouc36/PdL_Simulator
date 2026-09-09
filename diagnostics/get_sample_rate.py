@@ -14,7 +14,8 @@ import argparse
 from pathlib import Path
 from collections import deque
 
-window_average = deque()
+serial_window = deque()
+camera_window = deque()
 
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -40,10 +41,10 @@ def find_loop_frequency():
 
         current_time = time.time()
         dt = current_time - prev_time
-        window_average.append(dt)
+        serial_window.append(dt)
 
-        if len(window_average) >= WINDOW_LENGTH:
-            window_average.popleft()
+        if len(serial_window) >= WINDOW_LENGTH:
+            serial_window.popleft()
 
         average_dt = get_average()
 
@@ -56,13 +57,13 @@ def find_loop_frequency():
 
 def get_average():
     sum_of_window = 0
-    for i in range(len(window_average)):
-        sum_of_window += window_average[i]
+    for i in range(len(serial_window)):
+        sum_of_window += serial_window[i]
 
-    return sum_of_window / len(window_average)
+    return sum_of_window / len(serial_window)
 
 
-def get_sample_rate_from_csv(file, time_index=0):
+def get_sample_rate_from_csv(file, serial_time_index=0, camera_time_index=1):
     """
     Assuming time is a given index in a csv file
     """
@@ -72,37 +73,78 @@ def get_sample_rate_from_csv(file, time_index=0):
             mode="r",
             newline="",
             encoding="utf-8",
-            
         ) as file:
             reader = csv.reader(file)
             next(reader)
-            max_diff = 0
-            min_diff = float("inf")
-            previous_time = None
-            time_sum = 0
+            serial_max_diff, camera_max_diff, camera_serial_max_diff = 0, 0, 0
+            serial_min_diff, camera_min_diff, camera_serial_min_diff = (
+                float("inf"),
+                float("inf"),
+                float("inf"),
+            )
+            previous_serial_time, previous_camera_time = None, None
+            init_serial_time, init_camera_time = None, None
+            serial_time_sum, camera_time_sum, camera_serial_diff_sum = 0, 0, 0
+
             num_samples = 0
             for row in reader:
-
-                arduino_time = int(row[time_index])
+                serial_time = int(row[serial_time_index])
+                camera_time = float(row[camera_time_index]) * 1000  # convert to ms
 
                 # Should only be for first value
-                if previous_time is None:
-                    previous_time = arduino_time
+                if previous_serial_time is None and previous_camera_time is None:
+                    previous_serial_time, init_serial_time = serial_time, serial_time
+                    previous_camera_time, init_camera_time = camera_time, camera_time
                     continue
 
-                time_diff = arduino_time - previous_time
+                serial_time_diff = serial_time - previous_serial_time
+                camera_time_diff = camera_time - previous_camera_time
+
+                camera_serial_time_diff = (camera_time - init_camera_time) - (
+                    serial_time - init_serial_time
+                )
+
+                # Get totals to compute averages
                 num_samples += 1
-                time_sum += time_diff
+                serial_time_sum += serial_time_diff
+                camera_time_sum += camera_time_diff
+                camera_serial_diff_sum += camera_serial_time_diff
 
-                max_diff = max(time_diff, max_diff)
+                # Get max values
+                if serial_time_diff > serial_max_diff:
+                    serial_max_diff = serial_time_diff
 
-                min_diff = min(time_diff, min_diff)
+                if camera_time_diff > camera_max_diff:
+                    camera_max_diff = camera_time_diff
 
-                previous_time = arduino_time
+                if camera_serial_time_diff > camera_serial_max_diff:
+                    print(serial_time)
+                    camera_serial_max_diff = camera_serial_time_diff
 
-            average_sample_time = time_sum / num_samples
+                # Get min values
+                if serial_time_diff < serial_min_diff:
+                    serial_min_diff = serial_time_diff
+
+                if camera_time_diff < camera_min_diff:
+                    camera_min_diff = camera_time_diff
+
+                if camera_serial_time_diff < camera_serial_min_diff:
+                    camera_serial_min_diff = camera_serial_time_diff
+
+                previous_serial_time = serial_time
+                previous_camera_time = camera_time
+
+            average_serial_time = serial_time_sum / num_samples
+            average_camera_time = camera_time_sum / num_samples
+            average_camera_serial_time_diff = camera_serial_diff_sum / num_samples
             print(
-                f"Average sample time: {average_sample_time:.2f}, max: {max_diff}, min: {min_diff}"
+                f"Average serial time (ms): {average_serial_time:.2f}, max: {serial_max_diff:.2f}, min: {serial_min_diff:.2f}"
+            )
+            print(
+                f"Average camera time (ms): {average_camera_time:.2f}, max: {camera_max_diff:.2f}, min: {camera_min_diff:.2f}"
+            )
+            print(
+                f"Average difference between camera and serial times (ms): {average_camera_serial_time_diff:.2f}, max: {camera_serial_max_diff:.2f}, min: {camera_serial_min_diff:.2f}"
             )
 
     except Exception as e:
@@ -124,7 +166,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--time_index",
+        "--serial_time_index",
         type=int,
         required=False,
         default=0,
@@ -137,4 +179,4 @@ if __name__ == "__main__":
         find_loop_frequency()
 
     else:
-        get_sample_rate_from_csv(args.name_file, args.time_index)
+        get_sample_rate_from_csv(args.name_file, args.serial_time_index)
