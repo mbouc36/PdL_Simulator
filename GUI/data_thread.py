@@ -74,7 +74,7 @@ NAME_COLUMN = "Name"
 KEY_COLUMN = "Key"
 
 # Sensor Data
-IMU_INITIALIZATION_TIME = 10  # s
+IMU_INITIALIZATION_TIME = 15  # s
 
 
 class SharedData:
