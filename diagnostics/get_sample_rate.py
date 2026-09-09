@@ -11,6 +11,8 @@ import csv
 import time
 import serial
 import argparse
+import numpy as np
+import pandas as pd
 from pathlib import Path
 from collections import deque
 
@@ -76,15 +78,13 @@ def get_sample_rate_from_csv(file, serial_time_index=0, camera_time_index=1):
         ) as file:
             reader = csv.reader(file)
             next(reader)
-            serial_max_diff, camera_max_diff, camera_serial_max_diff = 0, 0, 0
-            serial_min_diff, camera_min_diff, camera_serial_min_diff = (
-                float("inf"),
+            serial_max_diff, camera_max_diff = 0, 0
+            serial_min_diff, camera_min_diff = (
                 float("inf"),
                 float("inf"),
             )
             previous_serial_time, previous_camera_time = None, None
-            init_serial_time, init_camera_time = None, None
-            serial_time_sum, camera_time_sum, camera_serial_diff_sum = 0, 0, 0
+            serial_time_sum, camera_time_sum = 0, 0
 
             num_samples = 0
             for row in reader:
@@ -93,22 +93,17 @@ def get_sample_rate_from_csv(file, serial_time_index=0, camera_time_index=1):
 
                 # Should only be for first value
                 if previous_serial_time is None and previous_camera_time is None:
-                    previous_serial_time, init_serial_time = serial_time, serial_time
-                    previous_camera_time, init_camera_time = camera_time, camera_time
+                    previous_serial_time = serial_time
+                    previous_camera_time = camera_time
                     continue
 
                 serial_time_diff = serial_time - previous_serial_time
                 camera_time_diff = camera_time - previous_camera_time
 
-                camera_serial_time_diff = (camera_time - init_camera_time) - (
-                    serial_time - init_serial_time
-                )
-
                 # Get totals to compute averages
                 num_samples += 1
                 serial_time_sum += serial_time_diff
                 camera_time_sum += camera_time_diff
-                camera_serial_diff_sum += camera_serial_time_diff
 
                 # Get max values
                 if serial_time_diff > serial_max_diff:
@@ -117,10 +112,6 @@ def get_sample_rate_from_csv(file, serial_time_index=0, camera_time_index=1):
                 if camera_time_diff > camera_max_diff:
                     camera_max_diff = camera_time_diff
 
-                if camera_serial_time_diff > camera_serial_max_diff:
-                    print(serial_time)
-                    camera_serial_max_diff = camera_serial_time_diff
-
                 # Get min values
                 if serial_time_diff < serial_min_diff:
                     serial_min_diff = serial_time_diff
@@ -128,27 +119,73 @@ def get_sample_rate_from_csv(file, serial_time_index=0, camera_time_index=1):
                 if camera_time_diff < camera_min_diff:
                     camera_min_diff = camera_time_diff
 
-                if camera_serial_time_diff < camera_serial_min_diff:
-                    camera_serial_min_diff = camera_serial_time_diff
-
                 previous_serial_time = serial_time
                 previous_camera_time = camera_time
 
             average_serial_time = serial_time_sum / num_samples
             average_camera_time = camera_time_sum / num_samples
-            average_camera_serial_time_diff = camera_serial_diff_sum / num_samples
             print(
                 f"Average serial time (ms): {average_serial_time:.2f}, max: {serial_max_diff:.2f}, min: {serial_min_diff:.2f}"
             )
             print(
                 f"Average camera time (ms): {average_camera_time:.2f}, max: {camera_max_diff:.2f}, min: {camera_min_diff:.2f}"
             )
-            print(
-                f"Average difference between camera and serial times (ms): {average_camera_serial_time_diff:.2f}, max: {camera_serial_max_diff:.2f}, min: {camera_serial_min_diff:.2f}"
-            )
+
+            return average_serial_time, average_camera_time
 
     except Exception as e:
         print(f"Failed to read sensor data from csv: {e}")
+
+
+def get_camera_arduino_drift(file, train_data_percentage=0.70):
+    """
+    Measure difference between arduino time and camera time and detemermine if the
+    difference can be measured as a linear offset
+
+    Returns true if the data is validated
+    """
+
+    df = pd.read_csv(file)
+
+    arduino = df["Arduino Time"].to_numpy() / 1000
+    camera = df["Camera Time"].to_numpy()
+
+    arduino = arduino - arduino[0]
+    camera = camera - camera[0]
+
+    error = camera - arduino
+
+    split = int(len(error) * train_data_percentage)
+
+    slope, intercept = np.polyfit(arduino[:split], error[:split], 1)
+
+    predicted_error = slope * arduino[split:] + intercept
+
+    residual = error[split:] - predicted_error
+
+    mean_residual = round(np.mean(residual) * 1000, 2)
+
+    print("Drift rate:", round(slope * 1000, 2), "ms/s")
+
+    # Mean difference between predicted and acctual drift
+    print("Mean residual:", mean_residual, "ms")
+    print("Residual std:", round(np.std(residual) * 1000, 2), "ms")
+    print("Maximum residual:", round(np.max(np.abs(residual)) * 1000, 2), "ms")
+
+
+    actual_error = error[split:]
+
+    ss_res = np.sum((actual_error - predicted_error) ** 2)
+    ss_tot = np.sum((actual_error - np.mean(actual_error)) ** 2)
+
+    r_squared = 1 - (ss_res / ss_tot)
+
+    print("Test R²:", round(r_squared, 4))
+
+    if r_squared > 0.90 and mean_residual < 33.3:
+        return True
+    else:
+        return False
 
 
 if __name__ == "__main__":
@@ -180,3 +217,4 @@ if __name__ == "__main__":
 
     else:
         get_sample_rate_from_csv(args.name_file, args.serial_time_index)
+        get_camera_arduino_drift(args.name_file)

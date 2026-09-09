@@ -74,7 +74,7 @@ NAME_COLUMN = "Name"
 KEY_COLUMN = "Key"
 
 # Sensor Data
-IMU_INITIALIZATION_TIME = 10 #s
+IMU_INITIALIZATION_TIME = 10  # s
 
 
 class SharedData:
@@ -174,7 +174,6 @@ class DataThread(QThread):
             self.video_output_path, fourcc, fps, (frame_width, frame_height)
         )
 
-
         while self.running:
 
             ret, frame = cap.read()
@@ -185,6 +184,7 @@ class DataThread(QThread):
 
             raw_sensor_data = self.shm.get_value()
             if raw_sensor_data is None:
+                print("Failed to retrieve raw sensor data")
                 continue
 
             self.frame_ready.emit(frame)
