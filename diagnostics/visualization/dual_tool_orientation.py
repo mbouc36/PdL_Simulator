@@ -5,8 +5,8 @@ Version: 2.0
 Description: Use IMU and ToF distance to get orientation in a quaternion visualization
 """
 
-import sys
 import os
+import sys
 import serial
 from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -22,6 +22,7 @@ SERIAL_PORT = config["serial_port"]
 BAUD_RATE = config["baud_rate"]
 
 NORTH_OFFSET = 0
+COUNT_TILL_SETTLED = 2000
 
 
 class VisualizeDualIMU(QWidget):
@@ -63,9 +64,11 @@ class DualIMUData(QThread):
         # Initialize the left_tracker
         left_tracker = IMUQuaternionTracker("left")
         right_tracker = IMUQuaternionTracker("right")
+        iter_counter = 0
 
         try:
             while True:
+
                 try:
                     line = ser.readline().decode("utf-8").strip()
                     line = line.split(",")
@@ -75,6 +78,11 @@ class DualIMUData(QThread):
 
                 if not line:
                     continue
+
+                iter_counter += 1
+                if iter_counter == COUNT_TILL_SETTLED:
+                    left_tracker.set_gain()
+                    right_tracker.set_gain()
 
                 arduino_time = line[0]
                 left_imu_values = [arduino_time] + line[5:14]

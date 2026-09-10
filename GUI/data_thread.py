@@ -9,8 +9,8 @@ import sys
 import os
 import cv2
 import csv
+import time
 import serial
-from time import sleep
 from pathlib import Path
 
 from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker
@@ -59,7 +59,8 @@ RAW_SENSOR_CSV_COLUMNS = [
 ]
 PROCESSED_DATA_CSV = "processed_data.csv"
 PROCESSED_CSV_COLUMNS = [
-    "Time",
+    "Arduino Time",
+    "Camera Time",
     "Front Weight",
     "Back Weight",
     "Left Surge",
@@ -71,6 +72,9 @@ PROCESSED_CSV_COLUMNS = [
 # CSV File Data
 NAME_COLUMN = "Name"
 KEY_COLUMN = "Key"
+
+# Sensor Data
+IMU_INITIALIZATION_TIME = 15  # s
 
 
 class SharedData:
@@ -89,6 +93,7 @@ class SharedData:
 
 class DataThread(QThread):
     frame_ready = pyqtSignal(object)
+    sensors_ready = pyqtSignal(object)
     sensor_data = pyqtSignal(object)
 
     def __init__(self, folder_name, visualize):
@@ -128,6 +133,31 @@ class DataThread(QThread):
 
     def run(self):
         self.running = True
+
+        # Initialize the tracker
+        left_imu = IMUQuaternionTracker(name="left")
+        right_imu = IMUQuaternionTracker(name="right")
+
+        # Initialize tof manager
+        tof_manager = TOFManager()
+        self.serial_thread.start()
+        init_start_time = time.monotonic()
+
+        while time.monotonic() - init_start_time < IMU_INITIALIZATION_TIME:
+            raw_sensor_data = self.shm.get_value()
+            if raw_sensor_data is None:
+                continue
+
+            arduino_time = raw_sensor_data[0]
+            left_imu_values = [arduino_time] + raw_sensor_data[5:14]
+            right_imu_values = [arduino_time] + raw_sensor_data[14:]
+            left_quaternions = [left_imu.get_quaternion(left_imu_values)]
+            right_quaternions = [right_imu.get_quaternion(right_imu_values)]
+
+        left_imu.set_gain()
+        right_imu.set_gain()
+        self.sensors_ready.emit(True)
+
         cap = cv2.VideoCapture(0)
         frame_width = 1920
         frame_height = 1080
@@ -144,20 +174,17 @@ class DataThread(QThread):
             self.video_output_path, fourcc, fps, (frame_width, frame_height)
         )
 
-        # Initialize the tracker
-        left_imu = IMUQuaternionTracker(name="left")
-        right_imu = IMUQuaternionTracker(name="right")
-
-        # Initialize tof manager
-        tof_manager = TOFManager()
-        self.serial_thread.start()
-        sleep(5)
-
         while self.running:
 
             ret, frame = cap.read()
+            camera_time = time.perf_counter()
             if not ret:
                 print("Error capturing frame")
+                continue
+
+            raw_sensor_data = self.shm.get_value()
+            if raw_sensor_data is None:
+                print("Failed to retrieve raw sensor data")
                 continue
 
             self.frame_ready.emit(frame)
@@ -165,9 +192,6 @@ class DataThread(QThread):
             # Write to video file
             video_output.write(frame)
 
-            raw_sensor_data = self.shm.get_value()
-            if raw_sensor_data is None:
-                continue
             arduino_time = raw_sensor_data[0]
             load_cell_values = raw_sensor_data[1:3]
             tof_values = raw_sensor_data[3:5]
@@ -181,6 +205,7 @@ class DataThread(QThread):
             # Ensure all values are the same format
             processed_data = (
                 [arduino_time]
+                + [camera_time]
                 + list(load_cell_values)
                 + distances
                 + left_quaternions
@@ -201,6 +226,7 @@ class DataThread(QThread):
     def stop(self):
         self.running = False
         self.serial_thread.running = False
+        self.sensors_ready.emit(False)
         self.wait()
 
 

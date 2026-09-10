@@ -10,12 +10,10 @@ import os
 import cv2
 import csv
 import time
+import pandas as pd
+from enum import Enum
 from pathlib import Path
 from datetime import date
-from enum import Enum
-import pandas as pd
-
-
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (
