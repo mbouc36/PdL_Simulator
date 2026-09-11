@@ -33,6 +33,8 @@ STARTING_GAIN = 0.8
 SETTLED_GAIN = 0.041
 
 class IMUQuaternionTracker:
+    STARTING_GAIN = 0.8
+    SETTLED_GAIN = 0.041
     def __init__(self, name="left", config_file=CONFIG_FILENAME):
         self.filter = Madgwick(gain=STARTING_GAIN)
         self.q = np.array([1.0, 0.0, 0.0, 0.0])

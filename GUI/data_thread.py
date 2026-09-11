@@ -5,8 +5,8 @@ Version: 2.0
 Description: Get raw data over serial port and camera, process it and save it in csv or video file
 """
 
-import sys
 import os
+import sys
 import cv2
 import csv
 import time
