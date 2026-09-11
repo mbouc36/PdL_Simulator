@@ -28,8 +28,8 @@ def get_sample_quaternions(num_samples=300, num_init_samples=200):
     """
 
     serial_parser = SerialParser()
-    left_imu = IMUQuaternionTracker(name="left")
-    right_imu = IMUQuaternionTracker(name="right")
+    left_imu = IMUQuaternionTracker(name="left", use_offset=False)
+    right_imu = IMUQuaternionTracker(name="right", use_offset=False)
     input("Press ENTER when the sensor is positioned in the grooves")
     serial_parser.reset_input_buffer()
     left_samples = []

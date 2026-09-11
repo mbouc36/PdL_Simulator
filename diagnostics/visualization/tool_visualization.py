@@ -21,7 +21,7 @@ TIMEOUT_MS = 200
 
 class ToolVisualization(QWidget):
 
-    def __init__(self, north_offset=YAW_OFFSET):
+    def __init__(self, north_offset=0):
         super().__init__()
 
         self.figure = Figure()

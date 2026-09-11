@@ -13,7 +13,6 @@ import numpy as np
 from ahrs.filters import Madgwick
 from scipy.spatial.transform import Rotation
 
-
 GAUSS_TO_MILLI_TESLA_CONVERSION = 10
 MILLISECOND_TO_SECOND_CONVERSION = 1000
 CONFIG_FILENAME = os.path.join(
@@ -30,14 +29,16 @@ YAW_OFFSET = config["yaw_offset"]
 STARTING_GAIN = 0.8
 SETTLED_GAIN = 0.041
 
+
 class IMUQuaternionTracker:
     STARTING_GAIN = 0.8
     SETTLED_GAIN = 0.041
-    def __init__(self, name="left", config_file=CONFIG_FILENAME):
+
+    def __init__(self, name="left", config_file=CONFIG_FILENAME, use_offset=True):
         self.filter = Madgwick(gain=STARTING_GAIN)
         self.q = np.array([1.0, 0.0, 0.0, 0.0])
 
-        self.yaw_offset = Rotation.from_euler('z', YAW_OFFSET, degrees=True)
+        self.yaw_offset = Rotation.from_euler("z", YAW_OFFSET, degrees=True)
         self.accOffset = None
         self.accScale = None
         self.gOffset = None
@@ -45,7 +46,8 @@ class IMUQuaternionTracker:
         self.magScale = None
         self.name = name
         self.load_calibration_data(config_file)
-        self.last_time = 0
+        self.previous_time = 0
+        self.use_offset = use_offset
 
     def load_calibration_data(self, file):
         """
@@ -99,7 +101,6 @@ class IMUQuaternionTracker:
 
         return float(cleaned)
 
-
     def get_imu_data(self, values):
         """
         Read Raw Sensor Data and use calibrated values
@@ -128,8 +129,8 @@ class IMUQuaternionTracker:
         acc_data = np.array([axCal, ayCal, azCal])
         mag_data = np.array([mxCal, myCal, mzCal])
 
-        dt = (time - self.last_time) / MILLISECOND_TO_SECOND_CONVERSION
-        self.last_time = time
+        dt = (time - self.previous_time) / MILLISECOND_TO_SECOND_CONVERSION
+        self.previous_time = time
 
         return dt, gyro_data, acc_data, mag_data
 
@@ -156,14 +157,15 @@ class IMUQuaternionTracker:
             dt, gyro, accel, mag = self.get_imu_data(values)
         except ValueError as e:
             print(f"Failed to convert to float with error: {e}")
-            return 
+            return
 
         # Calculate quaternion
         q = self.update(dt, gyro, accel, mag)
 
-        q = [round(float(value), 5) for value in q ]
-
-        return self.apply_yaw_offset(q)
+        if self.use_offset:
+            return self.apply_yaw_offset(q)
+        else:
+            return q
 
     def set_gain(self, gain=SETTLED_GAIN):
         """
@@ -191,14 +193,13 @@ def poll_serial_port():
         line = ser.get_serial_line()
         if line is None:
             continue
-        
+
         quaternion = tracker.get_quaternion(line)
         if quaternion is None:
             print("Failed to retrived quaternion")
             continue
 
         print([quaternion])
-
 
 
 if __name__ == "__main__":
