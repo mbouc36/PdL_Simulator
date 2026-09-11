@@ -175,7 +175,7 @@ class IMUQuaternionTracker:
         self.filter.gain = gain
 
     def apply_yaw_offset(self, q):
-        rotation = Rotation.as_quat(q)
+        rotation = Rotation.from_quat(q)
         new_rotation = self.yaw_offset * rotation
         return new_rotation.as_quat()
 
