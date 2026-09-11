@@ -9,10 +9,10 @@ import os
 import sys
 import json
 from scipy.spatial.transform import Rotation
+
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from tools.serial_parser import SerialParser
 from tools.imu_orientation import IMUQuaternionTracker
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-
 
 CONFIG_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "../local_config.json"
@@ -51,10 +51,11 @@ def get_sample_quaternions(num_samples=300, num_init_samples=200):
         init_samples += 1
 
         print(
-            f"\rInitializing IMUs: {len(init_samples)}/{num_init_samples}",
+            f"\rInitializing IMUs: {init_samples}/{num_init_samples}",
             end="",
             flush=True,
         )
+    print()
 
     left_imu.set_gain()
     right_imu.set_gain()
@@ -133,10 +134,11 @@ def write_to_config_file(offset_yaw, config_file=CONFIG_PATH):
     data[CONIFG_ELEMENT_NAME] = offset_yaw
 
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f)
+        json.dump(data, f, indent=4)
 
 
 
 if __name__ == "__main__":
-    yaw_offset = compute_offset_quaternion()
+    yaw_offset = round(compute_offset_quaternion(), 2)
+    write_to_config_file(yaw_offset)
     
