@@ -46,7 +46,7 @@ class SerialParser:
         return raw_sensor_data
 
     def reset_input_buffer(self):
-        self.reset_input_buffer()
+        self.ser.reset_input_buffer()
 
     def close(self):
         self.close()

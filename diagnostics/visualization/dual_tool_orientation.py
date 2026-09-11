@@ -22,7 +22,7 @@ SERIAL_PORT = config["serial_port"]
 BAUD_RATE = config["baud_rate"]
 
 NORTH_OFFSET = 0
-COUNT_TILL_SETTLED = 2000
+COUNT_TILL_SETTLED = 200
 
 
 class VisualizeDualIMU(QWidget):
@@ -81,6 +81,7 @@ class DualIMUData(QThread):
 
                 iter_counter += 1
                 if iter_counter == COUNT_TILL_SETTLED:
+                    print("Gain updated")
                     left_tracker.set_gain()
                     right_tracker.set_gain()
 

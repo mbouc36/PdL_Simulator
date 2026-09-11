@@ -149,7 +149,7 @@ class IMUQuaternionTracker:
             values = line
 
         if len(values) != 10:
-            print("Incorrect number of variables passed")
+            print(f"Incorrect number of variables passed: {values}")
             return
 
         # Get raw data from IMU
@@ -170,6 +170,7 @@ class IMUQuaternionTracker:
         """
         Update gain of madwick filter
         """
+        print(f"IMU {self.name} gain upated to {gain}")
         self.filter.gain = gain
 
 

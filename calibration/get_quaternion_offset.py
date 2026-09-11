@@ -35,8 +35,11 @@ def get_sample_quaternions(num_samples=300, num_init_samples=200):
         if serial_line == None:
             continue
 
-        left_imu.get_quaternion(serial_line[SerialParser.LEFT_IMU_INDICES])
-        right_imu.get_quaternion(serial_line[SerialParser.RIGHT_IMU_INDICES])
+        serial_time = serial_line[SerialParser.TIME_INDEX]
+        left_imu.get_quaternion([serial_time] + serial_line[SerialParser.LEFT_IMU_INDICES])
+        right_imu.get_quaternion([serial_time] + serial_line[SerialParser.RIGHT_IMU_INDICES])
+        init_samples += 1
+
 
     left_imu.set_gain()
     right_imu.set_gain()
@@ -49,8 +52,16 @@ def get_sample_quaternions(num_samples=300, num_init_samples=200):
         if serial_line == None:
             continue
 
-        left_q = left_imu.get_quaternion(serial_line[SerialParser.LEFT_IMU_INDICES])
-        right_q = right_imu.get_quaternion(serial_line[SerialParser.RIGHT_IMU_INDICES])
+        serial_time = serial_line[SerialParser.TIME_INDEX]
+        print(serial_time)
+        left_imu_data = [serial_time] + serial_line[SerialParser.LEFT_IMU_INDICES]
+        right_imu_data = [serial_time] + serial_line[SerialParser.RIGHT_IMU_INDICES]
+        left_q = left_imu.get_quaternion(left_imu_data)
+        right_q = right_imu.get_quaternion(right_imu_data)
+
+        if left_q is None or right_q is None:
+            continue
+
         left_samples.append(left_q)
         right_samples.append(right_q)
 
@@ -72,7 +83,7 @@ def compute_average_quaternion(samples: list[tuple[list[float]]] ) -> Rotation:
 
     # convert Quaternion into roation object
     rotations = Rotation.from_quat(samples)
-    return rotations.mean().as_quat()
+    return rotations.mean()
 
 
 def compute_offset_quaternion(degree_tolerance=15):
@@ -82,14 +93,17 @@ def compute_offset_quaternion(degree_tolerance=15):
     left_average_rotation = compute_average_quaternion(left_samples)
     right_average_rotation = compute_average_quaternion(right_samples)
 
+    print(left_average_rotation.as_euler('xyz'))
+    print(right_average_rotation.as_euler('xyz'))
     similar_rotations = left_average_rotation.approx_equal(other=right_average_rotation, atol=math.radians(degree_tolerance))
+
     print(similar_rotations)
-    if similar_rotations[3] == True:
-        average_rotation = Rotation.concatenate([left_average_rotation, right_average_rotation])
-        return average_rotation
-    else:
-        print(f"Rotations invalid ")
+    # if similar_rotations[3] == True:
+    #     average_rotation = Rotation.concatenate([left_average_rotation, right_average_rotation])
+    #     return average_rotation
+    # else:
+    #     print(f"Rotations invalid ")
 
 
 if __name__ == "__main__":
-    compute_average_quaternion()
+    compute_offset_quaternion()
