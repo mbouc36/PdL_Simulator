@@ -91,8 +91,9 @@ def compute_average_quaternion(samples: list[tuple[list[float]]]) -> Rotation:
 
 
 def approx_equal_angle(value_1, value_2, degree_tolerance=15):
-    diff = (value_1 - value_2 + 180) % 360 - 180
-    return abs(diff) <= degree_tolerance
+    diff = abs((value_1 - value_2 + 180) % 360 - 180)
+    print(f"Difference between L and R yaw: {diff}")
+    return diff <= degree_tolerance
 
 
 def compute_offset_quaternion():
@@ -111,10 +112,11 @@ def compute_offset_quaternion():
         average_rotation = Rotation.concatenate(
             [left_average_rotation, right_average_rotation]
         )
-        return average_rotation
+        return average_rotation.as_quat()
     else:
         print(f"Rotations invalid ")
 
 
 if __name__ == "__main__":
-    compute_offset_quaternion()
+    offset_q = compute_offset_quaternion()
+    print(offset_q)
