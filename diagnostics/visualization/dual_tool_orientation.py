@@ -13,7 +13,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from update_config import load_config
-from data_processing.imu_orientation import IMUQuaternionTracker
+from tools.imu_orientation import IMUQuaternionTracker
 from diagnostics.visualization.tool_visualization import ToolVisualization
 
 config = load_config()
