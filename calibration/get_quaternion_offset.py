@@ -4,19 +4,20 @@ Date: 2026, Sep 6th
 Version: 1.0
 Description: Script which calculates the direction the simulator is facing and saves the output quaternion
 """
+
 import os
 import sys
 import math
 from scipy.spatial.transform import Rotation
 
-
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from tools.imu_orientation import IMUQuaternionTracker
 from tools.serial_parser import SerialParser
 
+
 def get_sample_quaternions(num_samples=300, num_init_samples=200):
     """
-    Get x samples of quaternions from both left and right IMUs, calculate the average 
+    Get x samples of quaternions from both left and right IMUs, calculate the average
     to get the offset quaternion
     """
 
@@ -36,10 +37,13 @@ def get_sample_quaternions(num_samples=300, num_init_samples=200):
             continue
 
         serial_time = serial_line[SerialParser.TIME_INDEX]
-        left_imu.get_quaternion([serial_time] + serial_line[SerialParser.LEFT_IMU_INDICES])
-        right_imu.get_quaternion([serial_time] + serial_line[SerialParser.RIGHT_IMU_INDICES])
+        left_imu.get_quaternion(
+            [serial_time] + serial_line[SerialParser.LEFT_IMU_INDICES]
+        )
+        right_imu.get_quaternion(
+            [serial_time] + serial_line[SerialParser.RIGHT_IMU_INDICES]
+        )
         init_samples += 1
-
 
     left_imu.set_gain()
     right_imu.set_gain()
@@ -76,7 +80,7 @@ def get_sample_quaternions(num_samples=300, num_init_samples=200):
     return left_samples, right_samples
 
 
-def compute_average_quaternion(samples: list[tuple[list[float]]] ) -> Rotation:
+def compute_average_quaternion(samples: list[tuple[list[float]]]) -> Rotation:
     """
     Get average quaternion from both left and right imus over the sample size
     """
@@ -86,23 +90,30 @@ def compute_average_quaternion(samples: list[tuple[list[float]]] ) -> Rotation:
     return rotations.mean()
 
 
-def compute_offset_quaternion(degree_tolerance=15):
+def approx_equal_angle(value_1, value_2, degree_tolerance=15):
+    diff = (value_1 - value_2 + 180) % 360 - 180
+    return abs(diff) <= degree_tolerance
 
+
+def compute_offset_quaternion():
 
     left_samples, right_samples = get_sample_quaternions()
     left_average_rotation = compute_average_quaternion(left_samples)
     right_average_rotation = compute_average_quaternion(right_samples)
 
-    print(left_average_rotation.as_euler('xyz'))
-    print(right_average_rotation.as_euler('xyz'))
-    similar_rotations = left_average_rotation.approx_equal(other=right_average_rotation, atol=math.radians(degree_tolerance))
-
-    print(similar_rotations)
-    # if similar_rotations[3] == True:
-    #     average_rotation = Rotation.concatenate([left_average_rotation, right_average_rotation])
-    #     return average_rotation
-    # else:
-    #     print(f"Rotations invalid ")
+    if (
+        approx_equal_angle(
+            left_average_rotation.as_euler("xyz")[2],
+            right_average_rotation.as_euler("xyz")[2],
+        )
+        == True
+    ):
+        average_rotation = Rotation.concatenate(
+            [left_average_rotation, right_average_rotation]
+        )
+        return average_rotation
+    else:
+        print(f"Rotations invalid ")
 
 
 if __name__ == "__main__":
