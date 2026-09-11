@@ -20,6 +20,7 @@ CONFIG_PATH = os.path.join(
 
 CONIFG_ELEMENT_NAME = "yaw_offset"
 
+
 def get_sample_quaternions(num_samples=300, num_init_samples=200):
     """
     Get x samples of quaternions from both left and right IMUs, calculate the average
@@ -127,8 +128,9 @@ def compute_offset_quaternion():
     else:
         print(f"Rotations invalid ")
 
+
 def write_to_config_file(offset_yaw, config_file=CONFIG_PATH):
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+    with open(config_file, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     data[CONIFG_ELEMENT_NAME] = offset_yaw
@@ -137,8 +139,6 @@ def write_to_config_file(offset_yaw, config_file=CONFIG_PATH):
         json.dump(data, f, indent=4)
 
 
-
 if __name__ == "__main__":
     yaw_offset = round(compute_offset_quaternion(), 2)
     write_to_config_file(yaw_offset)
-    

@@ -5,15 +5,14 @@ Version: 2.0
 Description: Compute an IMU's orientation based on it's configuration
 """
 
-import serial
+import os
+import sys
 import json
 import math
 import numpy as np
 from ahrs.filters import Madgwick
+from scipy.spatial.transform import Rotation
 
-
-import os
-import sys
 
 GAUSS_TO_MILLI_TESLA_CONVERSION = 10
 MILLISECOND_TO_SECOND_CONVERSION = 1000
@@ -24,11 +23,10 @@ CONFIG_FILENAME = os.path.join(
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
+from tools.serial_parser import SerialParser
 
 config = load_config()
-
-SERIAL_PORT = config["serial_port"]
-BAUD_RATE = config["baud_rate"]
+YAW_OFFSET = config["yaw_offset"]
 STARTING_GAIN = 0.8
 SETTLED_GAIN = 0.041
 
@@ -39,6 +37,7 @@ class IMUQuaternionTracker:
         self.filter = Madgwick(gain=STARTING_GAIN)
         self.q = np.array([1.0, 0.0, 0.0, 0.0])
 
+        self.yaw_offset = Rotation.from_euler('z', YAW_OFFSET, degrees=True)
         self.accOffset = None
         self.accScale = None
         self.gOffset = None
@@ -164,7 +163,7 @@ class IMUQuaternionTracker:
 
         q = [round(float(value), 5) for value in q ]
 
-        return q
+        return self.apply_yaw_offset(q)
 
     def set_gain(self, gain=SETTLED_GAIN):
         """
@@ -173,37 +172,33 @@ class IMUQuaternionTracker:
         print(f"IMU {self.name} gain upated to {gain}")
         self.filter.gain = gain
 
+    def apply_yaw_offset(self, q):
+        rotation = Rotation.as_quat(q)
+        new_rotation = self.yaw_offset * rotation
+        return new_rotation.as_quat()
+
 
 def poll_serial_port():
     """
     Function which reads serial port and prints quaternions
     """
-    try:
-        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-    except Exception:
-        print(f"Failed to connect to port: {SERIAL_PORT}")
-        exit(1)
+    ser = SerialParser()
 
     # Initialize the tracker
     tracker = IMUQuaternionTracker()
 
-    try:
-        while True:
-            try:
-                line = ser.readline().decode("utf-8").strip()
-            except Exception as e:
-                print(f"Failed to read line: {e}")
-                continue
+    while True:
+        line = ser.get_serial_line()
+        if line is None:
+            continue
+        
+        quaternion = tracker.get_quaternion(line)
+        if quaternion is None:
+            print("Failed to retrived quaternion")
+            continue
 
-            quaternion = tracker.get_quaternion(line)
-            if quaternion is None:
-                print("Failed to retrived quaternion")
-                continue
+        print([quaternion])
 
-            print([quaternion])
-
-    except KeyboardInterrupt:
-        print("\nTracking stopped.")
 
 
 if __name__ == "__main__":
