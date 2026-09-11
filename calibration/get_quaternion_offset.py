@@ -7,13 +7,18 @@ Description: Script which calculates the direction the simulator is facing and s
 
 import os
 import sys
-import math
+import json
 from scipy.spatial.transform import Rotation
-
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from tools.imu_orientation import IMUQuaternionTracker
 from tools.serial_parser import SerialParser
+from tools.imu_orientation import IMUQuaternionTracker
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
+
+CONFIG_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "../local_config.json"
+)
+
+CONIFG_ELEMENT_NAME = "yaw_offset"
 
 def get_sample_quaternions(num_samples=300, num_init_samples=200):
     """
@@ -45,6 +50,12 @@ def get_sample_quaternions(num_samples=300, num_init_samples=200):
         )
         init_samples += 1
 
+        print(
+            f"\rInitializing IMUs: {len(init_samples)}/{num_init_samples}",
+            end="",
+            flush=True,
+        )
+
     left_imu.set_gain()
     right_imu.set_gain()
     serial_parser.reset_input_buffer()
@@ -57,7 +68,6 @@ def get_sample_quaternions(num_samples=300, num_init_samples=200):
             continue
 
         serial_time = serial_line[SerialParser.TIME_INDEX]
-        print(serial_time)
         left_imu_data = [serial_time] + serial_line[SerialParser.LEFT_IMU_INDICES]
         right_imu_data = [serial_time] + serial_line[SerialParser.RIGHT_IMU_INDICES]
         left_q = left_imu.get_quaternion(left_imu_data)
@@ -112,11 +122,21 @@ def compute_offset_quaternion():
         average_rotation = Rotation.concatenate(
             [left_average_rotation, right_average_rotation]
         )
-        return average_rotation.mean().as_quat()
+        return average_rotation.mean().as_euler("xyz", degrees=True)[2]
     else:
         print(f"Rotations invalid ")
 
+def write_to_config_file(offset_yaw, config_file=CONFIG_PATH):
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    data[CONIFG_ELEMENT_NAME] = offset_yaw
+
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
 
 if __name__ == "__main__":
-    offset_q = compute_offset_quaternion()
-    print(offset_q)
+    yaw_offset = compute_offset_quaternion()
+    
