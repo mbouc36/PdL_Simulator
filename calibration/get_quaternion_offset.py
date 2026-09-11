@@ -104,8 +104,8 @@ def compute_offset_quaternion():
 
     if (
         approx_equal_angle(
-            left_average_rotation.as_euler("xyz")[2],
-            right_average_rotation.as_euler("xyz")[2],
+            left_average_rotation.as_euler("xyz", degrees=True)[2],
+            right_average_rotation.as_euler("xyz", degrees=True)[2],
         )
         == True
     ):
