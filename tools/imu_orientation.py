@@ -24,8 +24,6 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
 from tools.serial_parser import SerialParser
 
-config = load_config()
-YAW_OFFSET = config["yaw_offset"]
 STARTING_GAIN = 0.8
 SETTLED_GAIN = 0.041
 
@@ -38,7 +36,6 @@ class IMUQuaternionTracker:
         self.filter = Madgwick(gain=STARTING_GAIN)
         self.q = np.array([1.0, 0.0, 0.0, 0.0])
 
-        self.yaw_offset = Rotation.from_euler("z", YAW_OFFSET, degrees=True)
         self.accOffset = None
         self.accScale = None
         self.gOffset = None
@@ -67,6 +64,7 @@ class IMUQuaternionTracker:
         self.gOffset = data["gOffset"]
         self.magOffset = data["magOffset"]
         self.magScale = data["magScale"]
+        self.yaw_offset = Rotation.from_euler("z", data["yaw_offset"] , degrees=True)
 
     def clean_data(self, value):
         """

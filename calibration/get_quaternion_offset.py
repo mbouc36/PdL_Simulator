@@ -21,15 +21,15 @@ CONFIG_PATH = os.path.join(
 CONIFG_ELEMENT_NAME = "yaw_offset"
 
 
-def get_sample_quaternions(num_samples=300, num_init_samples=200):
+def get_sample_quaternions(first_imu_name, right_imu_name, num_samples=300, num_init_samples=200):
     """
     Get x samples of quaternions from both left and right IMUs, calculate the average
     to get the offset quaternion
     """
 
     serial_parser = SerialParser()
-    left_imu = IMUQuaternionTracker(name="left", use_offset=False)
-    right_imu = IMUQuaternionTracker(name="right", use_offset=False)
+    left_imu = IMUQuaternionTracker(name=first_imu_name, use_offset=False)
+    right_imu = IMUQuaternionTracker(name=right_imu_name, use_offset=False)
     input("Press ENTER when the sensor is positioned in the grooves")
     serial_parser.reset_input_buffer()
     left_samples = []
@@ -108,37 +108,31 @@ def approx_equal_angle(value_1, value_2, degree_tolerance=5):
     return diff <= degree_tolerance
 
 
-def compute_offset_quaternion():
 
-    left_samples, right_samples = get_sample_quaternions()
-    left_average_rotation = compute_average_quaternion(left_samples)
-    right_average_rotation = compute_average_quaternion(right_samples)
-
-    if (
-        approx_equal_angle(
-            left_average_rotation.as_euler("xyz", degrees=True)[2],
-            right_average_rotation.as_euler("xyz", degrees=True)[2],
-        )
-        == True
-    ):
-        average_rotation = Rotation.concatenate(
-            [left_average_rotation, right_average_rotation]
-        )
-        return average_rotation.mean().as_euler("xyz", degrees=True)[2]
-    else:
-        print(f"Rotations invalid ")
-
-
-def write_to_config_file(offset_yaw, config_file=CONFIG_PATH):
+def write_to_config_file(imu_name, offset_yaw, config_file=CONFIG_PATH):
+    """
+    Find imu_name in json file, write offset yaw
+    """
     with open(config_file, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    data[CONIFG_ELEMENT_NAME] = offset_yaw
+    data[imu_name][CONIFG_ELEMENT_NAME] = offset_yaw
 
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
 
+def compute_offset_quaternions(first_imu_name="left", second_imu_name="right"):
+
+    left_samples, right_samples = get_sample_quaternions(first_imu_name, second_imu_name)
+    left_average_rotation = compute_average_quaternion(left_samples)
+    right_average_rotation = compute_average_quaternion(right_samples)
+
+    left_offset = round(left_average_rotation.as_euler("xyz", degrees=True)[2], 2)
+    right_offset = round(right_average_rotation.as_euler("xyz", degrees=True)[2], 2)
+
+    write_to_config_file(first_imu_name, left_offset)
+    write_to_config_file(second_imu_name, right_offset)
+
 if __name__ == "__main__":
-    yaw_offset = round(compute_offset_quaternion(), 2)
-    write_to_config_file(yaw_offset)
+    compute_offset_quaternions()
