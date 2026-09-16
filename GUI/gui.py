@@ -8,14 +8,6 @@ Description: Script which contains class used to manage gui
 import sys
 import os
 import cv2
-import csv
-import time
-from pathlib import Path
-from datetime import date
-from enum import Enum
-import pandas as pd
-
-
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (
@@ -32,20 +24,7 @@ from PyQt5.QtWidgets import (
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from diagnostics.visualization.tool_visualization import ToolVisualization
 from data_thread import DataThread
-
-OUTPUT_DATA_FOLDER = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "../output_data"
-)
-
-# CSV File Data
-NAME_COLUMN = "Name"
-KEY_COLUMN = "Key"
-
-
-class SurgicalTasks(Enum):
-    PEG_TRANSFER = 1
-    INTRACORPOREAL_SUTURING = 2
-
+from file_manager import FileManager
 
 class GUI(QWidget):
     def __init__(self, name_to_key_file, test_mode=False, visualize=False):
@@ -56,7 +35,6 @@ class GUI(QWidget):
 
         self.name = ""
         self.key = ""
-        self.output_file = ""
         self.task_type = None
         self.create_name_to_key_file(name_to_key_file)
         self.name_to_key_file = name_to_key_file
@@ -106,6 +84,8 @@ class GUI(QWidget):
                 background-color: #FFFFF0;
             }
         """)
+
+        self.file_manager = FileManager(name_to_key_file=name_to_key_file)
 
     def create_login_page(self):
         start_page = QWidget()
@@ -233,7 +213,7 @@ class GUI(QWidget):
             return
 
         if self.data_thread is None:
-            self.data_thread = DataThread(self.output_file, self.visualize)
+            self.data_thread = DataThread(self.file_manager.destination_folder, self.visualize)
             self.data_thread.frame_ready.connect(self.update_video_frame)
             if self.visualize:
                 self.data_thread.sensor_data.connect(self.update_visulization)
@@ -500,14 +480,12 @@ class GUI(QWidget):
         self.pages.addWidget(task_menu_page)
 
         def set_peg_transfer_task():
-            self.task_type = SurgicalTasks.PEG_TRANSFER
-            self.manage_folders()
+            self.file_manager.update_destination_folder(FileManager.PEG_TRANSFER)
             self.start_video()
             self.pages.setCurrentWidget(self.video_page)
 
         def set_in_suturing_task():
-            self.task_type = SurgicalTasks.INTRACORPOREAL_SUTURING
-            self.manage_folders()
+            self.file_manager.update_destination_folder(FileManager.INTRACORPOREAL_SUTURING)
             self.start_video()
             self.pages.setCurrentWidget(self.video_page)
 
@@ -575,168 +553,3 @@ class GUI(QWidget):
             self.data_thread.stop()
 
         event.accept()
-
-    def manage_folders(self) -> str:
-        """
-        Create and organize folders needed for data collection
-
-        The format will be as follows
-
-        output_data
-            date
-                public_key
-                    - 000_name.txt
-                    - 001_peg
-                        - sensor_data (created by data thread)
-                        - camera data (created by data thread)
-                    - 002_suturing
-                    ...
-
-        return: the path of the trial for the specfied user on todays date
-        """
-
-        today = date.today().strftime("%d-%m-%Y")
-        todays_folder = Path(os.path.join(OUTPUT_DATA_FOLDER, today))
-        self.key = self.create_key()
-        user_folder_today = Path(os.path.join(todays_folder, self.key))
-        task_num = "001"
-        self.output_file = user_folder_today
-
-        print(user_folder_today)
-
-        # Create folder for the date and all required children
-        if not os.path.exists(todays_folder):
-            todays_folder.mkdir(parents=True, exist_ok=True)
-
-        # Create folder for the user and all required children
-        if not os.path.exists(user_folder_today):
-            user_folder_today.mkdir(parents=True, exist_ok=True)
-            # create file storing name
-            if self.name is None:
-                print("Name is None")
-                exit(1)
-
-            with open(
-                self.name_to_key_file, mode="a", newline="", encoding="utf-8"
-            ) as file:
-                writer = csv.writer(file)
-                new_row = [self.name, self.key]
-                writer.writerow(new_row)
-
-        # User foler exists, check for task number
-        else:
-            # list of all files sorted
-            task_folders = sorted(
-                os.listdir(user_folder_today), key=lambda name: int(name[:3])
-            )
-
-            task_num = task_folders[-1][:3] + 1
-
-        if self.task_type == SurgicalTasks.PEG_TRANSFER:
-            task_name = "peg_transfer"
-        elif self.task_type == SurgicalTasks.INTRACORPOREAL_SUTURING:
-            task_name = "intracorp_suturing"
-        else:
-            print(f"Invalid task type: {self.task_type}")
-            exit(1)
-
-        return task_num + task_name
-
-    def is_name_valid(self, name) -> bool:
-        if name is None:
-            return False
-
-        df = pd.read_csv(self.name_to_key_file)
-        names = df[NAME_COLUMN]
-
-        if name in names.values:
-            return False
-
-        return True
-
-    def is_key_vald(self, key):
-        if key is None:
-            return False
-
-        df = pd.read_csv(self.name_to_key_file)
-        keys = df[KEY_COLUMN]
-
-        if key in keys.values:
-            return False
-
-        # TODO: Needs to check also that it is older than the last create key
-        dir_path = Path(OUTPUT_DATA_FOLDER)
-
-        date_folders = [f.name for f in dir_path.iterdir() if f.is_dir()]
-        if len(date_folders) == 0:
-            return True
-
-        latest_date_folder = Path(os.path.join(OUTPUT_DATA_FOLDER, date_folders[-1]))
-
-        folders = [f.name for f in latest_date_folder.iterdir() if f.is_dir()]
-
-        if len(folders) == 0:
-            return True
-
-        # Sorts folder names alphabetically
-        folders.sort()
-        last_folder_name = folders[-1]
-
-        if len(key) == len(last_folder_name):
-            return key < last_folder_name
-
-        return True
-
-    def create_key(self):
-        """
-        Creates key in alphabetical format: A-Z
-        Adds an additional letter to new keys when the final letter(s) are reached
-        ex: Z -> AA, ZZ- > AAA ...
-
-        """
-
-        dir_path = Path(OUTPUT_DATA_FOLDER)
-
-        date_folders = [f.name for f in dir_path.iterdir() if f.is_dir()]
-        if len(date_folders) == 0:
-            return "A"
-
-        latest_date_folder = Path(os.path.join(OUTPUT_DATA_FOLDER, date_folders[-1]))
-
-        folders = [f.name for f in latest_date_folder.iterdir() if f.is_dir()]
-
-        if len(folders) == 0:
-            return "A"
-
-        # Sorts folder names alphabetically
-        folders.sort()
-        last_folder_name = folders[-1]
-
-        # Find next letter(s)
-        chars = list(last_folder_name.upper())
-
-        i = len(chars) - 1
-
-        while i >= 0:
-            if chars[i] != "Z":
-                chars[i] = chr(ord(chars[i]) + 1)
-                return "".join(chars)
-
-            chars[i] = "A"
-            i -= 1
-
-        return "A" * (len(last_folder_name) + 1)
-
-    def create_name_to_key_file(self, file_path):
-        if file_path is None:
-            print("name_to_key_file is not a valid path")
-            exit(1)
-
-        if os.path.exists(file_path):
-            return
-
-        columns = [NAME_COLUMN, KEY_COLUMN]
-
-        df = pd.DataFrame(columns=columns)
-
-        df.to_csv(file_path, index=False)
