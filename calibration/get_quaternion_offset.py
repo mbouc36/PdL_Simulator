@@ -9,6 +9,7 @@ import os
 import sys
 import json
 from time import sleep
+from scipy.stats import circmean
 from scipy.spatial.transform import Rotation
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -131,14 +132,25 @@ def compute_offset_quaternions(first_imu_name="left", second_imu_name="right"):
         first_imu_name, second_imu_name
     )
 
-    for q in left_samples[::100]:
-        r = Rotation.from_quat(q, scalar_first=True)
-        print(r.as_euler("xyz", degrees=True))
+    for samples in [left_samples, right_samples]:
+        rotations = Rotation.from_quat(samples, scalar_first=True)
 
-    for q in right_samples[::100]:
-        r = Rotation.from_quat(q, scalar_first=True)
-        print(r.as_euler("xyz", degrees=True))
+        # Method 1: mean 3D orientation, then extract yaw
+        quat_mean_yaw = rotations.mean().as_euler(
+            "xyz", degrees=True
+        )[2]
 
+        # Method 2: extract each yaw, then circular-mean the yaws
+        yaws = rotations.as_euler("xyz", degrees=True)[:, 2]
+
+        yaw_mean = circmean(
+            yaws,
+            low=-180,
+            high=180
+        )
+
+        print("Quaternion mean -> yaw:", quat_mean_yaw)
+        print("Circular mean of yaw:", yaw_mean)
     left_average_rotation = compute_average_quaternion(left_samples)
     right_average_rotation = compute_average_quaternion(right_samples)
 
