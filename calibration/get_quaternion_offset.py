@@ -130,6 +130,15 @@ def compute_offset_quaternions(first_imu_name="left", second_imu_name="right"):
     left_samples, right_samples = get_sample_quaternions(
         first_imu_name, second_imu_name
     )
+
+    for q in left_samples[::100]:
+        r = Rotation.from_quat(q, scalar_first=True)
+        print(r.as_euler("xyz", degrees=True))
+
+    for q in right_samples[::100]:
+        r = Rotation.from_quat(q, scalar_first=True)
+        print(r.as_euler("xyz", degrees=True))
+
     left_average_rotation = compute_average_quaternion(left_samples)
     right_average_rotation = compute_average_quaternion(right_samples)
 
