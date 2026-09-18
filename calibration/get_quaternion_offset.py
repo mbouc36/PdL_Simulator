@@ -8,6 +8,7 @@ Description: Script which calculates the direction the simulator is facing and s
 import os
 import sys
 import json
+from time import sleep
 from scipy.spatial.transform import Rotation
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -15,13 +16,13 @@ from tools.serial_parser import SerialParser
 from tools.imu_orientation import IMUQuaternionTracker
 
 CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "../local_config.json"
+    os.path.dirname(os.path.abspath(__file__)), "imu_calibration/cal_data.json"
 )
 
 CONIFG_ELEMENT_NAME = "yaw_offset"
 
 
-def get_sample_quaternions(first_imu_name, right_imu_name, num_samples=300, num_init_samples=200):
+def get_sample_quaternions(first_imu_name, right_imu_name, num_samples=2000, num_init_samples=400):
     """
     Get x samples of quaternions from both left and right IMUs, calculate the average
     to get the offset quaternion
@@ -35,6 +36,7 @@ def get_sample_quaternions(first_imu_name, right_imu_name, num_samples=300, num_
     left_samples = []
     right_samples = []
 
+    sleep(5)
     init_samples = 0
     while init_samples < num_init_samples:
         serial_line = serial_parser.get_serial_line()
@@ -130,7 +132,7 @@ def compute_offset_quaternions(first_imu_name="left", second_imu_name="right"):
 
     left_offset = round(left_average_rotation.as_euler("xyz", degrees=True)[2], 2)
     right_offset = round(right_average_rotation.as_euler("xyz", degrees=True)[2], 2)
-
+    print(f"Left Offest {left_offset % 360}, Right Offset: {right_offset % 360}")
     write_to_config_file(first_imu_name, left_offset)
     write_to_config_file(second_imu_name, right_offset)
 

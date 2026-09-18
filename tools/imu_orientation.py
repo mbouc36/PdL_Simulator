@@ -52,7 +52,6 @@ class IMUQuaternionTracker:
         """
         with open(file, "r", encoding="utf-8") as f:
             data = json.load(f)
-
         try:
             data = data[self.name]
         except:
@@ -64,7 +63,7 @@ class IMUQuaternionTracker:
         self.gOffset = data["gOffset"]
         self.magOffset = data["magOffset"]
         self.magScale = data["magScale"]
-        self.yaw_offset = Rotation.from_euler("z", data["yaw_offset"] , degrees=True)
+        self.yaw_offset = Rotation.from_euler("y", data.get("yaw_offset", 0) , degrees=True)
 
     def clean_data(self, value):
         """
