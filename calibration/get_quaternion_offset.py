@@ -102,7 +102,7 @@ def compute_average_quaternion(samples: list[tuple[list[float]]]) -> Rotation:
     """
 
     # convert Quaternion into roation object
-    rotations = Rotation.from_quat(samples)
+    rotations = Rotation.from_quat(samples, scalar_first=True)
     return rotations.mean()
 
 

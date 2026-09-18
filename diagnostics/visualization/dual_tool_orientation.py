@@ -22,7 +22,7 @@ SERIAL_PORT = config["serial_port"]
 BAUD_RATE = config["baud_rate"]
 
 NORTH_OFFSET = 180
-COUNT_TILL_SETTLED = 200
+COUNT_TILL_SETTLED = 400
 
 
 class VisualizeDualIMU(QWidget):

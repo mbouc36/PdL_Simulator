@@ -63,9 +63,7 @@ class IMUQuaternionTracker:
         self.gOffset = data["gOffset"]
         self.magOffset = data["magOffset"]
         self.magScale = data["magScale"]
-        self.yaw_offset = Rotation.from_euler(
-            "z", data.get("yaw_offset", 0), degrees=True
-        )
+        self.yaw_offset = data.get("yaw_offset", 0)
 
     def clean_data(self, value):
         """
@@ -174,13 +172,14 @@ class IMUQuaternionTracker:
         self.filter.gain = gain
 
     def apply_yaw_offset(self, q):
-        rotation = Rotation.from_quat(q)
-
+        rotation = Rotation.from_quat(q, scalar_first=True)
         roll, pitch, yaw = rotation.as_euler("xyz", degrees=True)
-
         yaw -= self.yaw_offset
-
-        return Rotation.from_euler("xyz", [roll, pitch, yaw], degrees=True).as_quat()
+        if self.name == "right":
+            #yaw += 90
+            print(yaw)
+        offset_rotation = Rotation.from_euler("xyz", [roll, pitch, yaw], degrees=True).as_quat(scalar_first=True)
+        return offset_rotation
 
 
 def poll_serial_port():
