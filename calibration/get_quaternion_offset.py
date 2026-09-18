@@ -22,7 +22,9 @@ CONFIG_PATH = os.path.join(
 CONIFG_ELEMENT_NAME = "yaw_offset"
 
 
-def get_sample_quaternions(first_imu_name, right_imu_name, num_samples=2000, num_init_samples=400):
+def get_sample_quaternions(
+    first_imu_name, right_imu_name, num_samples=2000, num_init_samples=400
+):
     """
     Get x samples of quaternions from both left and right IMUs, calculate the average
     to get the offset quaternion
@@ -110,7 +112,6 @@ def approx_equal_angle(value_1, value_2, degree_tolerance=5):
     return diff <= degree_tolerance
 
 
-
 def write_to_config_file(imu_name, offset_yaw, config_file=CONFIG_PATH):
     """
     Find imu_name in json file, write offset yaw
@@ -126,7 +127,9 @@ def write_to_config_file(imu_name, offset_yaw, config_file=CONFIG_PATH):
 
 def compute_offset_quaternions(first_imu_name="left", second_imu_name="right"):
 
-    left_samples, right_samples = get_sample_quaternions(first_imu_name, second_imu_name)
+    left_samples, right_samples = get_sample_quaternions(
+        first_imu_name, second_imu_name
+    )
     left_average_rotation = compute_average_quaternion(left_samples)
     right_average_rotation = compute_average_quaternion(right_samples)
 
@@ -135,6 +138,7 @@ def compute_offset_quaternions(first_imu_name="left", second_imu_name="right"):
     print(f"Left Offest {left_offset % 360}, Right Offset: {right_offset % 360}")
     write_to_config_file(first_imu_name, left_offset)
     write_to_config_file(second_imu_name, right_offset)
+
 
 if __name__ == "__main__":
     compute_offset_quaternions()
