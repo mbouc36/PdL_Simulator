@@ -63,7 +63,9 @@ class IMUQuaternionTracker:
         self.gOffset = data["gOffset"]
         self.magOffset = data["magOffset"]
         self.magScale = data["magScale"]
-        self.yaw_offset = data.get("yaw_offset", 0)
+        self.heading_offset = self.heading_offset = Rotation.from_euler(
+            "z", -data.get("heading_offset", 0), degrees=True
+        )
 
     def clean_data(self, value):
         """
@@ -160,7 +162,7 @@ class IMUQuaternionTracker:
         q = self.update(dt, gyro, accel, mag)
 
         if self.use_offset:
-            return self.apply_yaw_offset(q)
+            return self.apply_heading_offset(q)
         else:
             return q
 
@@ -171,15 +173,18 @@ class IMUQuaternionTracker:
         print(f"IMU {self.name} gain upated to {gain}")
         self.filter.gain = gain
 
-    def apply_yaw_offset(self, q):
+    def apply_heading_offset(self, q):
         rotation = Rotation.from_quat(q, scalar_first=True)
-        roll, pitch, yaw = rotation.as_euler("xyz", degrees=True)
-        yaw -= self.yaw_offset
-        if self.name == "right":
-            #yaw += 90
-            print(yaw)
-        offset_rotation = Rotation.from_euler("xyz", [roll, pitch, yaw], degrees=True).as_quat(scalar_first=True)
-        return offset_rotation
+        corrected_rotation = self.heading_offset * rotation
+        return corrected_rotation.as_quat(scalar_first=True)
+
+    def get_z_heading(self, rotation):
+        # Direction of the IMU's local +Z axis in world coordinates
+        z_direction = rotation.apply([0.0, 0.0, 1.0])
+
+        heading = np.degrees(np.arctan2(z_direction[1], z_direction[0]))
+
+        return heading % 360
 
 
 def poll_serial_port():

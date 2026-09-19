@@ -8,6 +8,7 @@ Description: Script which calculates the direction the simulator is facing and s
 import os
 import sys
 import json
+import numpy as np
 from time import sleep
 from scipy.stats import circmean
 from scipy.spatial.transform import Rotation
@@ -20,7 +21,7 @@ CONFIG_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "imu_calibration/cal_data.json"
 )
 
-CONIFG_ELEMENT_NAME = "yaw_offset"
+CONIFG_ELEMENT_NAME = "heading_offset"
 
 
 def get_sample_quaternions(
@@ -126,36 +127,26 @@ def write_to_config_file(imu_name, offset_yaw, config_file=CONFIG_PATH):
         json.dump(data, f, indent=4)
 
 
+def get_z_heading(rotation):
+    # Direction of the IMU's local +Z axis in world coordinates
+    z_direction = rotation.apply([0.0, 0.0, 1.0])
+
+    heading = np.degrees(np.arctan2(z_direction[1], z_direction[0]))
+
+    return heading % 360
+
+
 def compute_offset_quaternions(first_imu_name="left", second_imu_name="right"):
 
     left_samples, right_samples = get_sample_quaternions(
         first_imu_name, second_imu_name
     )
 
-    for samples in [left_samples, right_samples]:
-        rotations = Rotation.from_quat(samples, scalar_first=True)
-
-        # Method 1: mean 3D orientation, then extract yaw
-        quat_mean_yaw = rotations.mean().as_euler(
-            "xyz", degrees=True
-        )[2]
-
-        # Method 2: extract each yaw, then circular-mean the yaws
-        yaws = rotations.as_euler("xyz", degrees=True)[:, 2]
-
-        yaw_mean = circmean(
-            yaws,
-            low=-180,
-            high=180
-        )
-
-        print("Quaternion mean -> yaw:", quat_mean_yaw)
-        print("Circular mean of yaw:", yaw_mean)
     left_average_rotation = compute_average_quaternion(left_samples)
     right_average_rotation = compute_average_quaternion(right_samples)
 
-    left_offset = round(left_average_rotation.as_euler("xyz", degrees=True)[2], 2)
-    right_offset = round(right_average_rotation.as_euler("xyz", degrees=True)[2], 2)
+    left_offset = round(get_z_heading(left_average_rotation), 2)
+    right_offset = round(get_z_heading(right_average_rotation), 2)
     print(f"Left Offest {left_offset % 360}, Right Offset: {right_offset % 360}")
     write_to_config_file(first_imu_name, left_offset)
     write_to_config_file(second_imu_name, right_offset)
