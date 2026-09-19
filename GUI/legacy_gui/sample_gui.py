@@ -294,7 +294,7 @@ class Application(tk.Tk):
     def on_GUI_close(self):
         self.test_train_window()
 
-    def run_data_processing(self):
+    def run_tools(self):
         self.current_image_index = 0
 
         # Function to update the image displayed in the top-level window
@@ -384,7 +384,7 @@ class Application(tk.Tk):
         self.add_button('History', self.destroy, (self.screen_height/3 + 240))
         self.add_button('Video Playback', self.video_playback, (self.screen_height/3 + 190))
         self.add_button('Evaluation', self.evaluation_menu, (self.screen_height/3 + 140))
-        self.add_button('Process Data', self.run_data_processing, (self.screen_height/3 + 90))
+        self.add_button('Process Data', self.run_tools, (self.screen_height/3 + 90))
         self.back_button = self.add_back_button('Back', self.test_train_window)
 
     # Function to show the pop-up window

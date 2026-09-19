@@ -5,8 +5,8 @@ Version: 2.0
 Description: Get raw data over serial port and camera, process it and save it in csv or video file
 """
 
-import sys
 import os
+import sys
 import cv2
 import csv
 import time
@@ -17,8 +17,8 @@ from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
-from data_processing.imu_orientation import IMUQuaternionTracker
-from data_processing.tof_manager import TOFManager
+from tools.imu_orientation import IMUQuaternionTracker
+from tools.tof_manager import TOFManager
 
 config = load_config()
 

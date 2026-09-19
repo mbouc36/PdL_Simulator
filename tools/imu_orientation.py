@@ -5,15 +5,13 @@ Version: 2.0
 Description: Compute an IMU's orientation based on it's configuration
 """
 
-import serial
+import os
+import sys
 import json
 import math
 import numpy as np
 from ahrs.filters import Madgwick
-
-
-import os
-import sys
+from scipy.spatial.transform import Rotation
 
 GAUSS_TO_MILLI_TESLA_CONVERSION = 10
 MILLISECOND_TO_SECOND_CONVERSION = 1000
@@ -24,16 +22,17 @@ CONFIG_FILENAME = os.path.join(
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
+from tools.serial_parser import SerialParser
 
-config = load_config()
-
-SERIAL_PORT = config["serial_port"]
-BAUD_RATE = config["baud_rate"]
 STARTING_GAIN = 0.8
 SETTLED_GAIN = 0.041
 
+
 class IMUQuaternionTracker:
-    def __init__(self, name="left", config_file=CONFIG_FILENAME):
+    STARTING_GAIN = 0.8
+    SETTLED_GAIN = 0.041
+
+    def __init__(self, name="left", config_file=CONFIG_FILENAME, use_offset=True):
         self.filter = Madgwick(gain=STARTING_GAIN)
         self.q = np.array([1.0, 0.0, 0.0, 0.0])
 
@@ -44,7 +43,8 @@ class IMUQuaternionTracker:
         self.magScale = None
         self.name = name
         self.load_calibration_data(config_file)
-        self.last_time = 0
+        self.previous_time = 0
+        self.use_offset = use_offset
 
     def load_calibration_data(self, file):
         """
@@ -52,7 +52,6 @@ class IMUQuaternionTracker:
         """
         with open(file, "r", encoding="utf-8") as f:
             data = json.load(f)
-
         try:
             data = data[self.name]
         except:
@@ -64,6 +63,9 @@ class IMUQuaternionTracker:
         self.gOffset = data["gOffset"]
         self.magOffset = data["magOffset"]
         self.magScale = data["magScale"]
+        self.heading_offset = self.heading_offset = Rotation.from_euler(
+            "z", -data.get("heading_offset", 0), degrees=True
+        )
 
     def clean_data(self, value):
         """
@@ -98,7 +100,6 @@ class IMUQuaternionTracker:
 
         return float(cleaned)
 
-
     def get_imu_data(self, values):
         """
         Read Raw Sensor Data and use calibrated values
@@ -127,8 +128,8 @@ class IMUQuaternionTracker:
         acc_data = np.array([axCal, ayCal, azCal])
         mag_data = np.array([mxCal, myCal, mzCal])
 
-        dt = (time - self.last_time) / MILLISECOND_TO_SECOND_CONVERSION
-        self.last_time = time
+        dt = (time - self.previous_time) / MILLISECOND_TO_SECOND_CONVERSION
+        self.previous_time = time
 
         return dt, gyro_data, acc_data, mag_data
 
@@ -147,7 +148,7 @@ class IMUQuaternionTracker:
             values = line
 
         if len(values) != 10:
-            print("Incorrect number of variables passed")
+            print(f"Incorrect number of variables passed: {values}")
             return
 
         # Get raw data from IMU
@@ -155,52 +156,57 @@ class IMUQuaternionTracker:
             dt, gyro, accel, mag = self.get_imu_data(values)
         except ValueError as e:
             print(f"Failed to convert to float with error: {e}")
-            return 
+            return
 
         # Calculate quaternion
         q = self.update(dt, gyro, accel, mag)
 
-        q = [round(float(value), 5) for value in q ]
-
-        return q
+        if self.use_offset:
+            return self.apply_heading_offset(q)
+        else:
+            return q
 
     def set_gain(self, gain=SETTLED_GAIN):
         """
         Update gain of madwick filter
         """
+        print(f"IMU {self.name} gain upated to {gain}")
         self.filter.gain = gain
+
+    def apply_heading_offset(self, q):
+        rotation = Rotation.from_quat(q, scalar_first=True)
+        corrected_rotation = self.heading_offset * rotation
+        return corrected_rotation.as_quat(scalar_first=True)
+
+    def get_z_heading(self, rotation):
+        # Direction of the IMU's local +Z axis in world coordinates
+        z_direction = rotation.apply([0.0, 0.0, 1.0])
+
+        heading = np.degrees(np.arctan2(z_direction[1], z_direction[0]))
+
+        return heading % 360
 
 
 def poll_serial_port():
     """
     Function which reads serial port and prints quaternions
     """
-    try:
-        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-    except Exception:
-        print(f"Failed to connect to port: {SERIAL_PORT}")
-        exit(1)
+    ser = SerialParser()
 
     # Initialize the tracker
     tracker = IMUQuaternionTracker()
 
-    try:
-        while True:
-            try:
-                line = ser.readline().decode("utf-8").strip()
-            except Exception as e:
-                print(f"Failed to read line: {e}")
-                continue
+    while True:
+        line = ser.get_serial_line()
+        if line is None:
+            continue
 
-            quaternion = tracker.get_quaternion(line)
-            if quaternion is None:
-                print("Failed to retrived quaternion")
-                continue
+        quaternion = tracker.get_quaternion(line)
+        if quaternion is None:
+            print("Failed to retrived quaternion")
+            continue
 
-            print([quaternion])
-
-    except KeyboardInterrupt:
-        print("\nTracking stopped.")
+        print([quaternion])
 
 
 if __name__ == "__main__":
