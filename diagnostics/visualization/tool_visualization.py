@@ -5,11 +5,11 @@ Version: 1.0
 Description: Class which is used to visualize the quaternions of an IMU and offset from ToF
 """
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout
+import numpy as np
 from PyQt5.QtCore import QTimer, Qt
 from matplotlib.figure import Figure
+from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-import numpy as np
 
 TIMEOUT_MS = 200
 
@@ -148,7 +148,7 @@ class ToolVisualization(QWidget):
     def set_north_offset(self, north_offset):
         self.north_offset = north_offset % 360
 
-        self.ax.view_init(elev=25, azim=self.north_offset)  # - 180
+        self.ax.view_init(elev=25, azim=self.north_offset)
 
         self.canvas.draw_idle()
 

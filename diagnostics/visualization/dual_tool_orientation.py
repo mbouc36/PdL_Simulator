@@ -13,7 +13,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from update_config import load_config
-from data_processing.imu_orientation import IMUQuaternionTracker
+from tools.imu_orientation import IMUQuaternionTracker
 from diagnostics.visualization.tool_visualization import ToolVisualization
 
 config = load_config()
@@ -21,8 +21,8 @@ config = load_config()
 SERIAL_PORT = config["serial_port"]
 BAUD_RATE = config["baud_rate"]
 
-NORTH_OFFSET = 0
-COUNT_TILL_SETTLED = 2000
+NORTH_OFFSET = 180
+COUNT_TILL_SETTLED = 400
 
 
 class VisualizeDualIMU(QWidget):
@@ -81,6 +81,7 @@ class DualIMUData(QThread):
 
                 iter_counter += 1
                 if iter_counter == COUNT_TILL_SETTLED:
+                    print("Gain updated")
                     left_tracker.set_gain()
                     right_tracker.set_gain()
 
