@@ -8,12 +8,6 @@ Description: Script which contains class used to manage gui
 import sys
 import os
 import cv2
-import csv
-import time
-import pandas as pd
-from enum import Enum
-from pathlib import Path
-from datetime import date
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (
@@ -42,7 +36,6 @@ class GUI(QWidget):
         self.name = ""
         self.key = ""
         self.task_type = None
-        self.create_name_to_key_file(name_to_key_file)
         self.name_to_key_file = name_to_key_file
         self.visualize = visualize
 
@@ -162,7 +155,8 @@ class GUI(QWidget):
         complete_btn.setFixedSize(120, 50)
 
         def complete_task():
-            self.data_thread.stop()
+            if not self.test_mode:
+                self.data_thread.stop()
             self.pages.setCurrentWidget(self.post_task_page)
 
         complete_btn.clicked.connect(lambda checked=False: complete_task())
@@ -330,13 +324,14 @@ class GUI(QWidget):
         new_user_page.setLayout(layout)
         self.pages.addWidget(new_user_page)
 
-        def validate_username():
+        def update_username():
             name = name_box.text().strip()
 
-            if not name or not self.is_name_valid(name):
+            if not name or not self.file_manager.is_name_valid(name):
                 error_label.setText("Please enter a valid name.")
                 return
 
+            self.file_manager.update_name_to_key_file(name=name)
             # Clear any previous error
             error_label.setText("")
             name_box.clear()
@@ -345,7 +340,7 @@ class GUI(QWidget):
             self.pages.setCurrentWidget(self.task_menu_page)
             return
 
-        next_btn.clicked.connect(lambda checked=False: validate_username())
+        next_btn.clicked.connect(lambda checked=False: update_username())
 
         return new_user_page
 
@@ -467,38 +462,43 @@ class GUI(QWidget):
             margin-bottom: 12px;
         """)
 
+        warm_up_btn = QPushButton("Warm Up")
         peg_transfer_btn = QPushButton("Peg Transfer")
+        precision_cutting_btn = QPushButton("Precision Cutting")
+        litigation_loop_btn = QPushButton("Litigation Loop")
         in_suturing_btn = QPushButton("Intracorporeal Suturing")
+        ex_suturing_btn = QPushButton("Extracorporeal Suturing")
 
-        for btn in [peg_transfer_btn, in_suturing_btn]:
+        buttons = [warm_up_btn, peg_transfer_btn, precision_cutting_btn, litigation_loop_btn,
+                   in_suturing_btn, ex_suturing_btn]
+
+        layout.addStretch()
+        layout.addWidget(title)
+    
+        for btn in buttons:
             btn.setFixedHeight(50)
             btn.setMinimumWidth(250)
             btn.setMaximumWidth(400)
             btn.setStyleSheet(self.btn_style)
+            layout.addWidget(btn, alignment=Qt.AlignCenter)
 
-        layout.addStretch()
-        layout.addWidget(title)
-        layout.addWidget(peg_transfer_btn, alignment=Qt.AlignCenter)
-        layout.addWidget(in_suturing_btn, alignment=Qt.AlignCenter)
         layout.addStretch()
 
         task_menu_page.setLayout(layout)
         self.pages.addWidget(task_menu_page)
 
-        def set_peg_transfer_task():
-            self.file_manager.update_destination_folder(FileManager.PEG_TRANSFER)
+        def set_task(task):
+            self.file_manager.update_destination_folder(task)
             self.start_video()
             self.pages.setCurrentWidget(self.video_page)
 
-        def set_in_suturing_task():
-            self.file_manager.update_destination_folder(FileManager.INTRACORPOREAL_SUTURING)
-            self.start_video()
-            self.pages.setCurrentWidget(self.video_page)
-
-        peg_transfer_btn.clicked.connect(lambda checked=False: set_peg_transfer_task())
-
-        in_suturing_btn.clicked.connect(lambda checked=False: set_in_suturing_task())
-
+        warm_up_btn.clicked.connect(lambda checked=False: set_task(FileManager.WARM_UP))
+        peg_transfer_btn.clicked.connect(lambda checked=False: set_task(FileManager.PEG_TRANSFER))
+        precision_cutting_btn.clicked.connect(lambda checked=False: set_task(FileManager.PERCISION_CUTTING))
+        litigation_loop_btn.clicked.connect(lambda checked=False: set_task(FileManager.LITIGATION_LOOP))
+        in_suturing_btn.clicked.connect(lambda checked=False: set_task(FileManager.INTRACORPOREAL_SUTURING))
+        ex_suturing_btn.clicked.connect(lambda checked=False: set_task(FileManager.EXTRACORPOREAL_SUTURING))
+        
         return task_menu_page
 
     def create_post_task_menu(self):

@@ -42,10 +42,11 @@ class FileManager:
         ]
         self.current_task = None
         self.destination_folder = None
+        self.user_folder = None
 
     def create_task_folder(self, task):
         if task not in self.tasks:
-            print("Failed to create task")
+            print("Invalid Task")
             return None
 
         if self.user_folder is None:
@@ -53,13 +54,15 @@ class FileManager:
         self.current_task = Path(os.path.join(self.user_folder, task))
 
         self.current_task.mkdir(parents=True, exist_ok=True)
+        self.create_trial_number_folder()
 
-    def create_trial_number(self):
+    def create_trial_number_folder(self):
         if self.current_task is None:
             print("No task folder created")
             return None
 
-        children = list(self.current_task.iterdir())
+        children = [trial.name for trial in self.current_task.iterdir()]
+        print(children)
 
         if len(children) == 0:
             current_trial = Path(os.path.join(self.current_task, "001"))
@@ -67,8 +70,8 @@ class FileManager:
 
         else:
             children.sort(key=int)
-            last_task = int(children[-1])
-            current_trial = Path(os.path.join(current_trial, str(last_task)))
+            current_task_num = int(children[-1]) + 1
+            current_trial = Path(os.path.join(self.current_task, f"{current_task_num:03d}"))
             current_trial.mkdir(parents=True, exist_ok=True)
 
         self.destination_folder = current_trial
@@ -103,7 +106,7 @@ class FileManager:
     def update_name_to_key_file(self, name):
 
         # update name to key 
-        if self.is_name_valid(self.name):
+        if not self.is_name_valid(name):
             print("Name is invalid")
             exit(1)
 
@@ -136,7 +139,7 @@ class FileManager:
         if key in keys.values:
             return False
 
-        dir_path = Path(os.join(OUTPUT_DATA_FOLDER, key))
+        dir_path = Path(os.path.join(OUTPUT_DATA_FOLDER, key))
 
         return not dir_path.exists()
 
@@ -146,7 +149,7 @@ class FileManager:
         nums = string.digits
         first_char = "".join(secrets.choice(characters))
 
-        return first_char.join(secrets.choices(nums) for _ in range(length))
+        return first_char + "".join(secrets.choice(nums) for _ in range(length -1))
 
     def create_name_to_key_file(self, file_path):
         
@@ -154,7 +157,7 @@ class FileManager:
             print("name_to_key_file is not a valid path")
             exit(1)
 
-        self.create_name_to_key_file = Path(file_path)
+        self.name_to_key_file = Path(file_path)
         if os.path.exists(file_path):
             return
 
@@ -166,5 +169,4 @@ class FileManager:
 
     def update_destination_folder(self, task):
         self.create_task_folder(task)
-        self.create_task_folder()
         
