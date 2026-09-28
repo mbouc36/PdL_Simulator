@@ -217,7 +217,9 @@ class GUI(QWidget):
             self.data_thread.frame_ready.connect(self.update_video_frame)
             if self.visualize:
                 self.data_thread.sensor_data.connect(self.update_visulization)
-
+        else:
+            self.data_thread.update_output_files(self.file_manager.destination_folder)
+            
         self.data_thread.start()
 
     def update_video_frame(self, frame):
