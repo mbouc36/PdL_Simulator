@@ -99,7 +99,7 @@ class DataThread(QThread):
     def __init__(self, folder_name, visualize):
         super().__init__()
         self.running = False
-        self.setup_output_files(folder_name)
+        self.update_output_files(folder_name)
 
         self.frame_idx = 0
         self.visualize = visualize
