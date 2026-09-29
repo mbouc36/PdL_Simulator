@@ -159,8 +159,9 @@ class GUI(QWidget):
         def complete_task():
             if not self.test_mode:
                 self.data_thread.stop()
+                self.is_data_valid = is_output_data_valid(self.file_manager.current_task, self.data_thread.video_output_path)
+                self.update_valid_data_label(self.is_data_valid)
 
-            self.is_data_valid = is_output_data_valid(self.file_manager.current_task)
             self.pages.setCurrentWidget(self.post_task_page)
 
         complete_btn.clicked.connect(lambda checked=False: complete_task())
@@ -532,7 +533,8 @@ class GUI(QWidget):
 
         new_task_btn = QPushButton("New Task")
         logout_btn = QPushButton("Logout")
-
+        # Label for depicting if data is valid
+        self.valid_data_label = QLabel("Unknown")
         for btn in [new_task_btn, logout_btn]:
             btn.setFixedHeight(50)
             btn.setMinimumWidth(250)
@@ -555,11 +557,25 @@ class GUI(QWidget):
         layout.addWidget(new_task_btn, alignment=Qt.AlignCenter)
         layout.addWidget(logout_btn, alignment=Qt.AlignCenter)
         layout.addStretch()
+        layout.addWidget(self.valid_data_label, alignment=Qt.AlignBottom | Qt.AlignRight)
+        
 
         post_task_page.setLayout(layout)
         self.pages.addWidget(post_task_page)
 
         return post_task_page
+
+    def update_valid_data_label(self, condition):
+        if condition:
+            self.valid_data_label.setText("Valid")
+            self.valid_data_label.setStyleSheet(
+                "background-color: green;"
+            )
+        else:
+            self.valid_data_label.setText("Invalid")
+            self.valid_data_label.setStyleSheet(
+                "background-color: red;"
+            )
 
     def closeEvent(self, event):
         if self.data_thread is not None:
