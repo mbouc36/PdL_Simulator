@@ -162,9 +162,9 @@ class IMUQuaternionTracker:
         q = self.update(dt, gyro, accel, mag)
 
         if self.use_offset:
-            return self.apply_heading_offset(q)
-        else:
-            return q
+            q = self.apply_heading_offset(q)
+
+        return [round(float(value), 5) for value in q ]
 
     def set_gain(self, gain=SETTLED_GAIN):
         """

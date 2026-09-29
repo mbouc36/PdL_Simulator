@@ -12,7 +12,7 @@ import pandas as pd
 from pathlib import Path
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from diagnostics.get_sample_rate import is_camera_arduino_linear, get_sample_rate_from_csv
+from diagnostics.get_sample_rate import is_likely_clock_drift, get_sample_rate_from_csv
 
 SAMPLE_RATE_THRESHOLD = 35
 MAX_DIFF_SAMPLE_RATE = .5
@@ -56,7 +56,7 @@ def is_output_data_valid(csv_file, video_file) -> bool:
         return False
 
 
-    return is_camera_arduino_linear(csv_file)
+    return is_likely_clock_drift(csv_file)
 
 
 
@@ -66,8 +66,8 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-f",
-        "--name_file",
+        "-c",
+        "--csv_file",
         type=Path,
         required=False,
         default=None,
@@ -83,4 +83,6 @@ if __name__ == "__main__":
         help="Path to video output file",
     )
 
-    r
+    args = parser.parse_args()
+    if not is_output_data_valid(args.csv_file, args.video_file):
+        print("Output Invalid")

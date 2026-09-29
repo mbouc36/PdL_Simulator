@@ -28,6 +28,7 @@ config = load_config()
 SERIAL_PORT = config["serial_port"]
 BAUD_RATE = config["baud_rate"]
 WINDOW_LENGTH = 10
+FPS = 30
 
 
 def find_loop_frequency():
@@ -137,56 +138,78 @@ def get_sample_rate_from_csv(file, serial_time_index=0, camera_time_index=1):
         print(f"Failed to read sensor data from csv: {e}")
 
 
-def is_camera_arduino_linear(file, train_data_percentage=0.70):
+
+def is_likely_clock_drift(
+    file,
+    min_r_squared=0.80,
+    max_residual_ms=100,
+    max_p95_residual_ms=70,
+):
     """
     Measure difference between arduino time and camera time and detemermine if the
     difference can be measured as a linear offset
 
     Returns true if the data is validated
     """
-
     df = pd.read_csv(file)
 
     arduino = df["Arduino Time"].to_numpy() / 1000
     camera = df["Camera Time"].to_numpy()
 
+    # Start both clocks at zero
     arduino = arduino - arduino[0]
     camera = camera - camera[0]
 
+    # Difference between the clocks
     error = camera - arduino
 
-    split = int(len(error) * train_data_percentage)
+    # Fit linear clock drift
+    slope, intercept = np.polyfit(arduino, error, 1)
+    predicted_error = slope * arduino + intercept
 
-    slope, intercept = np.polyfit(arduino[:split], error[:split], 1)
+    # Timing difference NOT explained by linear drift
+    residual = error - predicted_error
+    residual_ms = np.abs(residual) * 1000
 
-    predicted_error = slope * arduino[split:] + intercept
-
-    residual = error[split:] - predicted_error
-
-    mean_residual = round(np.mean(residual) * 1000, 2)
-
-    print("Drift rate:", round(slope * 1000, 2), "ms/s")
-
-    # Mean difference between predicted and acctual drift
-    print("Mean residual:", mean_residual, "ms")
-    print("Residual std:", round(np.std(residual) * 1000, 2), "ms")
-    print("Maximum residual:", round(np.max(np.abs(residual)) * 1000, 2), "ms")
-
-
-    actual_error = error[split:]
-
-    ss_res = np.sum((actual_error - predicted_error) ** 2)
-    ss_tot = np.sum((actual_error - np.mean(actual_error)) ** 2)
+    # How well does linear drift explain the error?
+    ss_res = np.sum((error - predicted_error) ** 2)
+    ss_tot = np.sum((error - np.mean(error)) ** 2)
 
     r_squared = 1 - (ss_res / ss_tot)
 
-    print("Test R²:", round(r_squared, 4))
+    # Residual statistics
+    p95_residual = np.percentile(residual_ms, 95)
+    max_residual = np.max(residual_ms)
+    rmse = np.sqrt(np.mean(residual ** 2)) * 1000
 
-    if r_squared > 0.90 and mean_residual < 33.3:
+    print(f"Drift rate:       {slope * 1000:.2f} ms/s")
+    print(f"R²:               {r_squared:.4f}")
+    print(f"Residual RMSE:    {rmse:.2f} ms")
+    print(f"95% residual:     {p95_residual:.2f} ms")
+    print(f"Maximum residual: {max_residual:.2f} ms")
+
+    # Drift must be sufficiently linear
+    linear_drift = r_squared >= min_r_squared
+
+    # There must not be excessive unexplained timing error
+    residual_valid = (
+        p95_residual <= max_p95_residual_ms
+        and max_residual <= max_residual_ms
+    )
+
+    if linear_drift and residual_valid:
+        print("PASS: Difference is consistent with linear clock drift.")
         return True
-    else:
-        return False
 
+    print("FAIL: Difference cannot be explained sufficiently by clock drift.")
+
+    if not linear_drift:
+        print("  - Drift is not sufficiently linear.")
+
+    if not residual_valid:
+        print("  - Excessive timing error remains after removing drift.")
+
+    return False
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -217,4 +240,4 @@ if __name__ == "__main__":
 
     else:
         get_sample_rate_from_csv(args.name_file, args.serial_time_index)
-        is_camera_arduino_linear(args.name_file)
+        is_likely_clock_drift(args.name_file)
