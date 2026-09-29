@@ -137,7 +137,7 @@ def get_sample_rate_from_csv(file, serial_time_index=0, camera_time_index=1):
         print(f"Failed to read sensor data from csv: {e}")
 
 
-def get_camera_arduino_drift(file, train_data_percentage=0.70):
+def is_camera_arduino_linear(file, train_data_percentage=0.70):
     """
     Measure difference between arduino time and camera time and detemermine if the
     difference can be measured as a linear offset
@@ -195,11 +195,11 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "-f",
-        "--name_file",
+        "--csv_file",
         type=Path,
         required=False,
         default=None,
-        help="Path to the name to key file",
+        help="Path to data output csv file",
     )
 
     parser.add_argument(
@@ -217,4 +217,4 @@ if __name__ == "__main__":
 
     else:
         get_sample_rate_from_csv(args.name_file, args.serial_time_index)
-        get_camera_arduino_drift(args.name_file)
+        is_camera_arduino_linear(args.name_file)

@@ -25,6 +25,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from diagnostics.visualization.tool_visualization import ToolVisualization
 from data_thread import DataThread
 from file_manager import FileManager
+from diagnostics.validate_data import is_output_data_valid
 
 class GUI(QWidget):
     def __init__(self, name_to_key_file, test_mode=False, visualize=False):
@@ -85,6 +86,7 @@ class GUI(QWidget):
         """)
 
         self.file_manager = FileManager(name_to_key_file=name_to_key_file)
+        self.is_data_valid = False
 
     def create_login_page(self):
         start_page = QWidget()
@@ -157,6 +159,8 @@ class GUI(QWidget):
         def complete_task():
             if not self.test_mode:
                 self.data_thread.stop()
+
+            self.is_data_valid = is_output_data_valid(self.file_manager.current_task)
             self.pages.setCurrentWidget(self.post_task_page)
 
         complete_btn.clicked.connect(lambda checked=False: complete_task())
@@ -490,6 +494,7 @@ class GUI(QWidget):
         def set_task(task):
             self.file_manager.update_destination_folder(task)
             self.start_video()
+            self.is_data_valid = False
             self.pages.setCurrentWidget(self.video_page)
 
         warm_up_btn.clicked.connect(lambda checked=False: set_task(FileManager.WARM_UP))
@@ -498,7 +503,7 @@ class GUI(QWidget):
         litigation_loop_btn.clicked.connect(lambda checked=False: set_task(FileManager.LITIGATION_LOOP))
         in_suturing_btn.clicked.connect(lambda checked=False: set_task(FileManager.INTRACORPOREAL_SUTURING))
         ex_suturing_btn.clicked.connect(lambda checked=False: set_task(FileManager.EXTRACORPOREAL_SUTURING))
-        
+
         return task_menu_page
 
     def create_post_task_menu(self):

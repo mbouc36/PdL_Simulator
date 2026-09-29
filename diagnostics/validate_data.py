@@ -1,0 +1,86 @@
+"""
+Author: Michael Boucouvalas
+Date: 2026, Sep 27th
+Version: 1.0
+Description: Validates Sensor and video output data
+"""
+import os
+import cv2 
+import sys
+import argparse
+import pandas as pd
+from pathlib import Path
+
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from diagnostics.get_sample_rate import is_camera_arduino_linear, get_sample_rate_from_csv
+
+SAMPLE_RATE_THRESHOLD = 35
+MAX_DIFF_SAMPLE_RATE = .5
+
+
+def frames_equal_csv_rows(video_path, csv_path):
+    # Get number of frames in video
+    video = cv2.VideoCapture(video_path)
+
+    if not video.isOpened():
+        raise ValueError(f"Could not open video: {video_path}")
+
+    frame_count = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+    video.release()
+
+    # Get number of rows in CSV
+    df = pd.read_csv(csv_path)
+    row_count = len(df)
+
+    print(f"Video frames: {frame_count}")
+    print(f"CSV rows:     {row_count}")
+
+    return frame_count == row_count
+
+
+def is_output_data_valid(csv_file, video_file) -> bool:
+
+    serial_sample_rate, camera_sample_rate = get_sample_rate_from_csv(csv_file)
+
+    if abs(serial_sample_rate - camera_sample_rate) > MAX_DIFF_SAMPLE_RATE:
+        print("Large difference in camera and output sample rate")
+        print(f"Serial: {serial_sample_rate}, Camera: {camera_sample_rate}")
+        return False
+
+    if serial_sample_rate > SAMPLE_RATE_THRESHOLD or camera_sample_rate > SAMPLE_RATE_THRESHOLD:
+        print(f"Sample rates greater than threshold of: {SAMPLE_RATE_THRESHOLD}")
+        print(f"Serial: {serial_sample_rate}, Camera: {camera_sample_rate}")
+        return False
+
+    if not frames_equal_csv_rows(csv_path=csv_file, video_path=video_file):
+        return False
+
+
+    return is_camera_arduino_linear(csv_file)
+
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Validate sensor and video output data"
+    )
+
+    parser.add_argument(
+        "-f",
+        "--name_file",
+        type=Path,
+        required=False,
+        default=None,
+        help="Path to the ouput csv file",
+    )
+
+    parser.add_argument(
+        "-v",
+        "--video_file",
+        type=Path,
+        required=False,
+        default=None,
+        help="Path to video output file",
+    )
+
+    r

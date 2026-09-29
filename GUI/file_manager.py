@@ -30,8 +30,10 @@ class FileManager:
     WARM_UP = "WU"
 
     def __init__(self, name_to_key_file):
-        self.key = None
         self.create_name_to_key_file(name_to_key_file)
+        self.key = None
+        while not self.is_new_key_vald(self.key):
+            self.key = self.create_key()
         self.tasks = [
             self.PEG_TRANSFER,
             self.PERCISION_CUTTING,
@@ -77,28 +79,8 @@ class FileManager:
         self.destination_folder = current_trial
 
     def create_new_user_folder(self):
-        """
-        Create folders for a new user
 
-        The format will be as follows
-
-        output_data
-            [Participant ID]
-                [Task ID]
-                    [Trial Number]
-                    ...
-
-        return: the path of the trial for the specfied user on todays date
-        """
-
-        self.key = self.create_key()
         self.user_folder = Path(os.path.join(OUTPUT_DATA_FOLDER, self.key))
-
-        # Continue to create key if key already exists
-        while not self.is_new_key_vald(self.key):
-            self.key = self.create_key()
-            self.user_folder = Path(os.path.join(OUTPUT_DATA_FOLDER, self.key))
-
         print(self.user_folder)
 
         self.user_folder.mkdir(parents=True, exist_ok=True)
