@@ -99,18 +99,7 @@ class DataThread(QThread):
     def __init__(self, folder_name, visualize):
         super().__init__()
         self.running = False
-        self.output_folder = os.path.join(OUTPUT_DATA_FOLDER, folder_name)
-        # Define the folder path
-        folder_path = Path(self.output_folder)
-
-        # Create the folder safely
-        folder_path.mkdir(parents=True, exist_ok=True)
-
-        self.video_output_path = os.path.join(self.output_folder, VIDEO_FILENAME)
-        self.raw_data_csv = os.path.join(self.output_folder, RAW_SENSOR_CSV)
-        self.processed_data_csv = os.path.join(self.output_folder, PROCESSED_DATA_CSV)
-        self.write_to_csv(self.raw_data_csv, RAW_SENSOR_CSV_COLUMNS)
-        self.write_to_csv(self.processed_data_csv, PROCESSED_CSV_COLUMNS)
+        self.update_output_files(folder_name)
 
         self.frame_idx = 0
         self.visualize = visualize
@@ -228,6 +217,18 @@ class DataThread(QThread):
         self.serial_thread.running = False
         self.sensors_ready.emit(False)
         self.wait()
+
+    def update_output_files(self, output_folder):
+        self.output_folder = os.path.join(OUTPUT_DATA_FOLDER, output_folder)
+        output_folder_path = Path(self.output_folder)
+
+        output_folder_path.mkdir(parents=True, exist_ok=True)
+
+        self.video_output_path = os.path.join(self.output_folder, VIDEO_FILENAME)
+        self.raw_data_csv = os.path.join(self.output_folder, RAW_SENSOR_CSV)
+        self.processed_data_csv = os.path.join(self.output_folder, PROCESSED_DATA_CSV)
+        self.write_to_csv(self.raw_data_csv, RAW_SENSOR_CSV_COLUMNS)
+        self.write_to_csv(self.processed_data_csv, PROCESSED_CSV_COLUMNS)
 
 
 class SerialThread(QThread):
