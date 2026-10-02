@@ -10,6 +10,14 @@ struct Position{
   float z;
 };
 
+enum State {
+    WAITING,
+    INITIALIZING,
+    RECORDING
+};
+
+State state = WAITING;
+
 struct IMUData{
   Position a;
   Position g;
@@ -26,10 +34,10 @@ struct Snapshot{
 };
 
 
-#define PRINT_FREQUENCY 40 //Hz
-unsigned long now;
-unsigned long last_print;
-const unsigned long period_ms = 1000/PRINT_FREQUENCY;
+#define PRINT_FREQUENCY 30 //Hz
+unsigned long nextSampleTime = 0;
+unsigned long recordingStartTime = 0;
+const unsigned long OUTPUT_PERIOD_US = 1000000UL/PRINT_FREQUENCY;
 Snapshot latest_snapshot;
 
 // Load Cell
@@ -184,46 +192,9 @@ void setup() {
   Serial.println("Ready");
 }
 
-void loop() {
-  now = millis();
+void readSensorData(void){
 
-  if (now - last_print >= period_ms) {
-    last_print = now;
-    Serial.print(now); Serial.print(", "); 
-
-    // Load Cells
-    Serial.print(latest_snapshot.front_weight); Serial.print(", ");
-    Serial.print(latest_snapshot.back_weight); Serial.print(", ");
-
-    // TOF
-    Serial.print(latest_snapshot.left_distance); Serial.print(", ");
-    Serial.print(latest_snapshot.right_distance); Serial.print(", ");
-
-    // IMU
-    Serial.print(latest_snapshot.left_imu.a.x); Serial.print(", ");
-    Serial.print(latest_snapshot.left_imu.a.y); Serial.print(", ");
-    Serial.print(latest_snapshot.left_imu.a.z); Serial.print(", ");
-    Serial.print(latest_snapshot.left_imu.g.x); Serial.print(", ");
-    Serial.print(latest_snapshot.left_imu.g.y); Serial.print(", ");
-    Serial.print(latest_snapshot.left_imu.g.z); Serial.print(", ");
-    Serial.print(latest_snapshot.left_imu.m.x); Serial.print(", ");
-    Serial.print(latest_snapshot.left_imu.m.y); Serial.print(", ");
-    Serial.print(latest_snapshot.left_imu.m.z); Serial.print(", ");
-
-    Serial.print(latest_snapshot.right_imu.a.x); Serial.print(", ");
-    Serial.print(latest_snapshot.right_imu.a.y); Serial.print(", ");
-    Serial.print(latest_snapshot.right_imu.a.z); Serial.print(", ");
-    Serial.print(latest_snapshot.right_imu.g.x); Serial.print(", ");
-    Serial.print(latest_snapshot.right_imu.g.y); Serial.print(", ");
-    Serial.print(latest_snapshot.right_imu.g.z); Serial.print(", ");
-    Serial.print(latest_snapshot.right_imu.m.x); Serial.print(", ");
-    Serial.print(latest_snapshot.right_imu.m.y); Serial.print(", ");
-    Serial.print(latest_snapshot.right_imu.m.z);
-    Serial.println("");
-
-  }
-
-  if (imu6_left.readReg((LSM6::STATUS_REG)) & 0b00000011 == 0b00000011){
+  if ((imu6_left.readReg((LSM6::STATUS_REG)) & 0b00000011) == 0b00000011){
     imu6_left.read();
     latest_snapshot.left_imu.a.x = imu6_left.a.x;
     latest_snapshot.left_imu.a.y = imu6_left.a.y;
@@ -233,14 +204,14 @@ void loop() {
     latest_snapshot.left_imu.g.z = imu6_left.g.z * imu_sensitivity;
   }
   
-  if (imu_mag_left.readReg(LIS3MDL::STATUS_REG) & 0b00001000 == 0b00001000){
+  if ((imu_mag_left.readReg(LIS3MDL::STATUS_REG) & 0b00001000) == 0b00001000){
     imu_mag_left.read();
     latest_snapshot.left_imu.m.x = imu_mag_left.m.x;
     latest_snapshot.left_imu.m.y = imu_mag_left.m.y;
     latest_snapshot.left_imu.m.z = imu_mag_left.m.z;
   }
 
-  if (imu6_right.readReg((LSM6::STATUS_REG)) & 0b00000011 == 0b00000011){
+  if ((imu6_right.readReg((LSM6::STATUS_REG)) & 0b00000011) == 0b00000011){
     imu6_right.read();
     latest_snapshot.right_imu.a.x = imu6_right.a.x;
     latest_snapshot.right_imu.a.y = imu6_right.a.y;
@@ -250,7 +221,7 @@ void loop() {
     latest_snapshot.right_imu.g.z = imu6_right.g.z * imu_sensitivity;
   }
   
-  if (imu_mag_right.readReg(LIS3MDL::STATUS_REG) & 0b00001000 == 0b00001000){
+  if ((imu_mag_right.readReg(LIS3MDL::STATUS_REG) & 0b00001000) == 0b00001000){
     imu_mag_right.read();
     latest_snapshot.right_imu.m.x = imu_mag_right.m.x;
     latest_snapshot.right_imu.m.y = imu_mag_right.m.y;
@@ -275,3 +246,89 @@ void loop() {
   }
 
 }
+
+
+void printSensorData(float timestamp){
+
+  Serial.print(timestamp/ / 1000.0); Serial.print(", "); 
+
+  // Load Cells
+  Serial.print(latest_snapshot.front_weight); Serial.print(", ");
+  Serial.print(latest_snapshot.back_weight); Serial.print(", ");
+
+  // TOF
+  Serial.print(latest_snapshot.left_distance); Serial.print(", ");
+  Serial.print(latest_snapshot.right_distance); Serial.print(", ");
+
+  // IMU
+  Serial.print(latest_snapshot.left_imu.a.x); Serial.print(", ");
+  Serial.print(latest_snapshot.left_imu.a.y); Serial.print(", ");
+  Serial.print(latest_snapshot.left_imu.a.z); Serial.print(", ");
+  Serial.print(latest_snapshot.left_imu.g.x); Serial.print(", ");
+  Serial.print(latest_snapshot.left_imu.g.y); Serial.print(", ");
+  Serial.print(latest_snapshot.left_imu.g.z); Serial.print(", ");
+  Serial.print(latest_snapshot.left_imu.m.x); Serial.print(", ");
+  Serial.print(latest_snapshot.left_imu.m.y); Serial.print(", ");
+  Serial.print(latest_snapshot.left_imu.m.z); Serial.print(", ");
+
+  Serial.print(latest_snapshot.right_imu.a.x); Serial.print(", ");
+  Serial.print(latest_snapshot.right_imu.a.y); Serial.print(", ");
+  Serial.print(latest_snapshot.right_imu.a.z); Serial.print(", ");
+  Serial.print(latest_snapshot.right_imu.g.x); Serial.print(", ");
+  Serial.print(latest_snapshot.right_imu.g.y); Serial.print(", ");
+  Serial.print(latest_snapshot.right_imu.g.z); Serial.print(", ");
+  Serial.print(latest_snapshot.right_imu.m.x); Serial.print(", ");
+  Serial.print(latest_snapshot.right_imu.m.y); Serial.print(", ");
+  Serial.print(latest_snapshot.right_imu.m.z);
+  Serial.println("");
+
+}
+
+
+void loop() {
+    if (Serial.available())
+    {
+        String command = Serial.readStringUntil('\n');
+        command.trim();
+
+        if (command == "INITIALIZATION")
+        {
+            state = INITIALIZING;
+
+            nextSampleTime = micros();
+        }
+
+        else if (command == "START")
+        {
+            state = RECORDING;
+
+            recordingStartTime = micros();
+
+            nextSampleTime = recordingStartTime;
+        }
+    }
+
+
+    if (state == INITIALIZING || state == RECORDING)
+    {
+        readSensorData();
+        unsigned long now = micros();
+        if ((long)(now - nextSampleTime) >= 0)
+        {
+            unsigned long timestamp;
+
+            if (state == RECORDING)
+            {
+                timestamp = now - recordingStartTime;
+            }
+            else
+            {
+                timestamp = now;
+            }
+            printSensorData(timestamp);
+
+            nextSampleTime += OUTPUT_PERIOD_US;
+        }
+    }
+}
+

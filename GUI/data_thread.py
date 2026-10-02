@@ -10,10 +10,11 @@ import sys
 import cv2
 import csv
 import time
+import queue
 import serial
 from pathlib import Path
 
-from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker
+from PyQt5.QtCore import QThread, pyqtSignal
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
@@ -77,18 +78,6 @@ KEY_COLUMN = "Key"
 IMU_INITIALIZATION_TIME = 15  # s
 
 
-class SharedData:
-    def __init__(self):
-        self.mutex = QMutex()
-        self.latest_value = None
-
-    def set_value(self, value):
-        with QMutexLocker(self.mutex):
-            self.latest_value = value
-
-    def get_value(self):
-        with QMutexLocker(self.mutex):
-            return self.latest_value
 
 
 class DataThread(QThread):
@@ -104,8 +93,8 @@ class DataThread(QThread):
         self.frame_idx = 0
         self.visualize = visualize
 
-        self.shm = SharedData()
-        self.serial_thread = SerialThread(self.shm)
+        self.serial_queue = queue.Queue()
+        self.serial_thread = SerialThread(self.serial_queue )
 
     def write_to_csv(self, filen_path, values):
         try:
@@ -121,6 +110,7 @@ class DataThread(QThread):
             print(f"Failed to write sensor data to csv: {e}")
 
     def run(self):
+        cap, video_output = self.create_camera_object()
         self.running = True
 
         # Initialize the tracker
@@ -130,11 +120,14 @@ class DataThread(QThread):
         # Initialize tof manager
         tof_manager = TOFManager()
         self.serial_thread.start()
+        self.serial_thread.start_initialization()
         init_start_time = time.monotonic()
 
         while time.monotonic() - init_start_time < IMU_INITIALIZATION_TIME:
-            raw_sensor_data = self.shm.get_value()
-            if raw_sensor_data is None:
+            try:
+                raw_sensor_data = self.serial_queue.get(timeout=0.1)
+            except queue.Empty:
+                print("No serial sample available")
                 continue
 
             arduino_time = raw_sensor_data[0]
@@ -146,34 +139,26 @@ class DataThread(QThread):
         left_imu.set_gain()
         right_imu.set_gain()
         self.sensors_ready.emit(True)
+        # Camera warm-up
+        for _ in range(10):
 
-        cap = cv2.VideoCapture(0)
-        frame_width = 1920
-        frame_height = 1080
-        fps = 30.0  # Set a default FPS
-
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, frame_width)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, frame_height)
-
-        # Define codec and VideoWriter object (uses 'mp4v' for MP4)
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        video_output = cv2.VideoWriter(
-            self.video_output_path, fourcc, fps, (frame_width, frame_height)
-        )
-
+            cap.read()
+            
+        self.serial_thread.clear_queue()
+        self.serial_thread.start_recording()
         while self.running:
 
             ret, frame = cap.read()
-            camera_time = time.perf_counter()
             if not ret:
                 print("Error capturing frame")
                 continue
 
-            raw_sensor_data = self.shm.get_value()
-            if raw_sensor_data is None:
-                print("Failed to retrieve raw sensor data")
+            camera_time = time.perf_counter()
+
+            try:
+                raw_sensor_data = self.serial_queue.get(timeout=0.1)
+            except queue.Empty:
+                print("No serial sample available")
                 continue
 
             self.frame_ready.emit(frame)
@@ -230,20 +215,57 @@ class DataThread(QThread):
         self.write_to_csv(self.raw_data_csv, RAW_SENSOR_CSV_COLUMNS)
         self.write_to_csv(self.processed_data_csv, PROCESSED_CSV_COLUMNS)
 
+    def create_camera_object(self):
+        cap = cv2.VideoCapture(0)
+        frame_width = 1920
+        frame_height = 1080
+        fps = 30.0  # Set a default FPS
+
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, frame_width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, frame_height)
+
+        # Define codec and VideoWriter object (uses 'mp4v' for MP4)
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        video_output = cv2.VideoWriter(
+            self.video_output_path, fourcc, fps, (frame_width, frame_height)
+        )
+
+        return cap, video_output
+
 
 class SerialThread(QThread):
-    def __init__(self, shm: SharedData):
+
+    def __init__(self, serial_queue):
         super().__init__()
+
         self.running = False
-        self.shm = shm
+        self.serial_queue = serial_queue
+
+        self.ser = serial.Serial(
+            SERIAL_PORT,
+            BAUD_RATE,
+            timeout=1
+        )
+
+    def start_initialization(self):
+        self.ser.reset_input_buffer()
+        self.ser.write(b"INITIALIZATION\n")
+        self.ser.flush()
+
+    def start_recording(self):
+        self.ser.reset_input_buffer()
+        self.ser.write(b"START\n")
+        self.ser.flush()
 
     def run(self):
         self.running = True
-        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
 
         while self.running:
             try:
-                line = ser.readline().decode("utf-8").strip()  # wait till new line
+                line = self.ser.readline().decode("utf-8").strip()
+
             except Exception as e:
                 print(e)
                 continue
@@ -252,8 +274,18 @@ class SerialThread(QThread):
                 continue
 
             raw_sensor_data = line.split(",")
+
             if len(raw_sensor_data) != len(RAW_SENSOR_CSV_COLUMNS):
                 print("Invalid line")
                 continue
 
-            self.shm.set_value(raw_sensor_data)
+            self.serial_queue.put(raw_sensor_data)
+
+    def clear_queue(self):
+        while True:
+
+            try:
+                self.serial_queue.get_nowait()
+            except queue.Empty:
+
+                break
