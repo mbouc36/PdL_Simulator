@@ -26,6 +26,8 @@ from diagnostics.visualization.tool_visualization import ToolVisualization
 from data_thread import DataThread
 from file_manager import FileManager
 from diagnostics.validate_data import is_output_data_valid
+from tools.post_processing import PostProcessingThread
+
 
 class GUI(QWidget):
     def __init__(self, name_to_key_file, test_mode=False, visualize=False):
@@ -159,7 +161,16 @@ class GUI(QWidget):
         def complete_task():
             if not self.test_mode:
                 self.data_thread.stop()
-                self.is_data_valid = is_output_data_valid(self.file_manager.current_task, self.data_thread.video_output_path)
+                self.post_processing_thread = PostProcessingThread(
+                    self.data_thread.raw_data_csv,
+                    self.data_thread.camera_timestamp_csv,
+                    self.data_thread.output_folder,
+                )
+
+                self.post_processing_thread.run()
+                self.is_data_valid = is_output_data_valid(
+                    self.file_manager.current_task, self.data_thread.video_output_path
+                )
                 self.update_valid_data_label(self.is_data_valid)
 
             self.pages.setCurrentWidget(self.post_task_page)
@@ -218,13 +229,15 @@ class GUI(QWidget):
             return
 
         if self.data_thread is None:
-            self.data_thread = DataThread(self.file_manager.destination_folder, self.visualize)
+            self.data_thread = DataThread(
+                self.file_manager.destination_folder, self.visualize
+            )
             self.data_thread.frame_ready.connect(self.update_video_frame)
             if self.visualize:
                 self.data_thread.sensor_data.connect(self.update_visulization)
         else:
             self.data_thread.update_output_files(self.file_manager.destination_folder)
-            
+
         self.data_thread.start()
 
     def update_video_frame(self, frame):
@@ -476,12 +489,18 @@ class GUI(QWidget):
         in_suturing_btn = QPushButton("Intracorporeal Suturing")
         ex_suturing_btn = QPushButton("Extracorporeal Suturing")
 
-        buttons = [warm_up_btn, peg_transfer_btn, precision_cutting_btn, litigation_loop_btn,
-                   in_suturing_btn, ex_suturing_btn]
+        buttons = [
+            warm_up_btn,
+            peg_transfer_btn,
+            precision_cutting_btn,
+            litigation_loop_btn,
+            in_suturing_btn,
+            ex_suturing_btn,
+        ]
 
         layout.addStretch()
         layout.addWidget(title)
-    
+
         for btn in buttons:
             btn.setFixedHeight(50)
             btn.setMinimumWidth(250)
@@ -501,11 +520,21 @@ class GUI(QWidget):
             self.pages.setCurrentWidget(self.video_page)
 
         warm_up_btn.clicked.connect(lambda checked=False: set_task(FileManager.WARM_UP))
-        peg_transfer_btn.clicked.connect(lambda checked=False: set_task(FileManager.PEG_TRANSFER))
-        precision_cutting_btn.clicked.connect(lambda checked=False: set_task(FileManager.PERCISION_CUTTING))
-        litigation_loop_btn.clicked.connect(lambda checked=False: set_task(FileManager.LITIGATION_LOOP))
-        in_suturing_btn.clicked.connect(lambda checked=False: set_task(FileManager.INTRACORPOREAL_SUTURING))
-        ex_suturing_btn.clicked.connect(lambda checked=False: set_task(FileManager.EXTRACORPOREAL_SUTURING))
+        peg_transfer_btn.clicked.connect(
+            lambda checked=False: set_task(FileManager.PEG_TRANSFER)
+        )
+        precision_cutting_btn.clicked.connect(
+            lambda checked=False: set_task(FileManager.PERCISION_CUTTING)
+        )
+        litigation_loop_btn.clicked.connect(
+            lambda checked=False: set_task(FileManager.LITIGATION_LOOP)
+        )
+        in_suturing_btn.clicked.connect(
+            lambda checked=False: set_task(FileManager.INTRACORPOREAL_SUTURING)
+        )
+        ex_suturing_btn.clicked.connect(
+            lambda checked=False: set_task(FileManager.EXTRACORPOREAL_SUTURING)
+        )
 
         return task_menu_page
 
@@ -557,8 +586,9 @@ class GUI(QWidget):
         layout.addWidget(new_task_btn, alignment=Qt.AlignCenter)
         layout.addWidget(logout_btn, alignment=Qt.AlignCenter)
         layout.addStretch()
-        layout.addWidget(self.valid_data_label, alignment=Qt.AlignBottom | Qt.AlignRight)
-        
+        layout.addWidget(
+            self.valid_data_label, alignment=Qt.AlignBottom | Qt.AlignRight
+        )
 
         post_task_page.setLayout(layout)
         self.pages.addWidget(post_task_page)
@@ -568,14 +598,10 @@ class GUI(QWidget):
     def update_valid_data_label(self, condition):
         if condition:
             self.valid_data_label.setText("Valid")
-            self.valid_data_label.setStyleSheet(
-                "background-color: green;"
-            )
+            self.valid_data_label.setStyleSheet("background-color: green;")
         else:
             self.valid_data_label.setText("Invalid")
-            self.valid_data_label.setStyleSheet(
-                "background-color: red;"
-            )
+            self.valid_data_label.setStyleSheet("background-color: red;")
 
     def closeEvent(self, event):
         if self.data_thread is not None:
