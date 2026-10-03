@@ -85,11 +85,10 @@ class DataThread(QThread):
     frame_ready = pyqtSignal(object)
     sensors_ready = pyqtSignal(object)
 
-    def __init__(self, folder_name, visualize):
+    def __init__(self, folder_name):
         super().__init__()
 
         self.running = False
-        self.visualize = visualize
 
         self.output_folder = os.path.join(
             OUTPUT_DATA_FOLDER,
@@ -212,8 +211,8 @@ class DataThread(QThread):
                         ]
                     )
 
-                    if self.visualize:
-                        self.frame_ready.emit(frame)
+                    
+                    self.frame_ready.emit(frame)
 
                     self.frame_idx += 1
 

@@ -162,8 +162,6 @@ class GUI(QWidget):
             if not self.test_mode:
                 self.data_thread.stop()
                 self.post_processing_thread = PostProcessingThread(
-                    self.data_thread.raw_data_csv,
-                    self.data_thread.camera_timestamp_csv,
                     self.data_thread.output_folder
                 )
 
