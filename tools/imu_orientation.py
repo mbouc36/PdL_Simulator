@@ -13,7 +13,6 @@ import numpy as np
 from ahrs.filters import Madgwick
 from scipy.spatial.transform import Rotation
 
-GAUSS_TO_MILLI_TESLA_CONVERSION = 10
 MILLISECOND_TO_SECOND_CONVERSION = 1000
 CONFIG_FILENAME = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -116,13 +115,13 @@ class IMUQuaternionTracker:
 
         mxCal = (
             (mx - self.magOffset["x"]) * self.magScale["x"]
-        ) / GAUSS_TO_MILLI_TESLA_CONVERSION
+        ) 
         myCal = (
             (my - self.magOffset["y"]) * self.magScale["y"]
-        ) / GAUSS_TO_MILLI_TESLA_CONVERSION
+        ) 
         mzCal = (
             (mz - self.magOffset["z"]) * self.magScale["z"]
-        ) / GAUSS_TO_MILLI_TESLA_CONVERSION
+        ) 
 
         gyro_data = np.array([gxCal, gyCal, gzCal])
         acc_data = np.array([axCal, ayCal, azCal])
