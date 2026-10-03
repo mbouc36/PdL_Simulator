@@ -36,16 +36,16 @@ def get_file_from_folder(folder, file):
 
 
 def get_video_file(task_folder):
-    get_file_from_folder(task_folder, VIDEO_FILENAME)
+    return get_file_from_folder(task_folder, VIDEO_FILENAME)
 
 
 def get_raw_data_file(task_folder):
-    get_file_from_folder(task_folder, RAW_SENSOR_CSV)
+    return get_file_from_folder(task_folder, RAW_SENSOR_CSV)
 
 
 def get_camera_data_file(task_folder):
-    get_file_from_folder(task_folder, CAMERA_TIMESTAMP_CSV)
+    return get_file_from_folder(task_folder, CAMERA_TIMESTAMP_CSV)
 
 
 def get_processed_data_file(task_folder):
-    get_file_from_folder(task_folder, PROCESSED_DATA_CSV)
+    return get_file_from_folder(task_folder, PROCESSED_DATA_CSV)
