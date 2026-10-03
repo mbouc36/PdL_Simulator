@@ -1,13 +1,16 @@
+
+import os 
+import sys
 import csv
-import os
 import numpy as np
 
 from PyQt5.QtCore import QThread, pyqtSignal
 
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from tools.imu_orientation import IMUQuaternionTracker
 from tools.tof_manager import TOFManager
-
-PROCESSED_DATA_CSV = "processed_data.csv"
+from tools.get_files_from_folder import  get_raw_data_file, get_camera_data_file, get_processed_data_file
+from diagnostics.validate_data import is_output_data_valid
 
 PROCESSED_CSV_COLUMNS = [
     "Frame",
@@ -23,28 +26,21 @@ PROCESSED_CSV_COLUMNS = [
 
 
 class PostProcessingThread(QThread):
-
     progress = pyqtSignal(int)
-
     processing_complete = pyqtSignal(str)
-
     processing_error = pyqtSignal(str)
+    data_valid = pyqtSignal(bool)
 
     def __init__(
         self,
-        raw_sensor_csv,
-        camera_timestamp_csv,
         output_folder,
     ):
         super().__init__()
 
-        self.raw_sensor_csv = raw_sensor_csv
-        self.camera_timestamp_csv = camera_timestamp_csv
-
-        self.processed_data_csv = os.path.join(
-            output_folder,
-            PROCESSED_DATA_CSV,
-        )
+        self.raw_sensor_csv = get_raw_data_file(output_folder)
+        self.camera_timestamp_csv = get_camera_data_file(output_folder)
+        self.processed_data_csv = get_processed_data_file(output_folder)
+        self.output_folder = output_folder
 
         self.running = False
 
@@ -65,7 +61,6 @@ class PostProcessingThread(QThread):
 
             left_imu = IMUQuaternionTracker(name="left")
             right_imu = IMUQuaternionTracker(name="right")
-
             tof_manager = TOFManager()
 
             self.clock_a, self.clock_b = self.calculate_clock_mapping(sensor_data)
@@ -132,18 +127,12 @@ class PostProcessingThread(QThread):
                     )
 
                     load_cell_values = interpolated[1:3]
-
                     tof_values = interpolated[3:5]
-
                     left_imu_values = [target_arduino_time] + interpolated[5:14]
-
                     right_imu_values = [target_arduino_time] + interpolated[14:]
 
-
                     distances = list(tof_manager.get_distances(tof_values))
-
                     left_quaternion = left_imu.get_quaternion(left_imu_values)
-
                     right_quaternion = right_imu.get_quaternion(right_imu_values)
 
                     processed_data = (
@@ -159,24 +148,19 @@ class PostProcessingThread(QThread):
                     )
 
                     writer.writerow(processed_data)
-
-
                     percent = int(((camera_idx + 1) / total_frames) * 100)
 
                     self.progress.emit(percent)
 
-
             if self.running:
+                self.data_valid.emit(is_output_data_valid(self.output_folder))
                 self.progress.emit(100)
-
                 self.processing_complete.emit(self.processed_data_csv)
 
         except Exception as e:
-
             self.processing_error.emit(str(e))
 
         finally:
-
             self.running = False
 
     def _load_sensor_data(self):

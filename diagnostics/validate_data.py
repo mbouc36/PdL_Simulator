@@ -1,7 +1,7 @@
 """
 Author: Michael Boucouvalas
 Date: 2026, Sep 27th
-Version: 1.0
+Version: 2.0
 Description: Validates Sensor and video output data
 """
 import os
@@ -12,7 +12,8 @@ import pandas as pd
 from pathlib import Path
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from diagnostics.get_sample_rate import is_likely_clock_drift, get_sample_rate_from_csv
+from diagnostics.get_sample_rate import is_likely_clock_drift, get_time_stats_from_csv
+from tools.get_files_from_folder import get_raw_data_file, get_camera_data_file, get_processed_data_file, get_video_file
 
 SAMPLE_RATE_THRESHOLD = 35
 MAX_DIFF_SAMPLE_RATE = .5
@@ -38,9 +39,14 @@ def frames_equal_csv_rows(video_path, csv_path):
     return frame_count == row_count
 
 
-def is_output_data_valid(csv_file, video_file) -> bool:
+def is_output_data_valid(output_folder) -> bool:
+    video_file = get_video_file(output_folder)
+    raw_data = get_raw_data_file(output_folder)
+    camera_data = get_camera_data_file(output_folder)
+    output_data = get_processed_data_file(output_folder)
 
-    serial_sample_rate, camera_sample_rate = get_sample_rate_from_csv(csv_file)
+    serial_sample_rate = get_time_stats_from_csv(raw_data, has_header=True)
+    camera_sample_rate = get_time_stats_from_csv(camera_data, has_header=True)
 
     if abs(serial_sample_rate - camera_sample_rate) > MAX_DIFF_SAMPLE_RATE:
         print("Large difference in camera and output sample rate")
@@ -52,11 +58,11 @@ def is_output_data_valid(csv_file, video_file) -> bool:
         print(f"Serial: {serial_sample_rate}, Camera: {camera_sample_rate}")
         return False
 
-    if not frames_equal_csv_rows(csv_path=csv_file, video_path=video_file):
+    if not frames_equal_csv_rows(csv_path=output_data, video_path=video_file):
         return False
 
 
-    return is_likely_clock_drift(csv_file)
+    return is_likely_clock_drift(output_data)
 
 
 

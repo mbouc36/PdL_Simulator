@@ -10,7 +10,6 @@ import sys
 import cv2
 import csv
 import time
-import queue
 import serial
 from pathlib import Path
 
@@ -18,8 +17,6 @@ from PyQt5.QtCore import QThread, pyqtSignal
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
-from tools.imu_orientation import IMUQuaternionTracker
-from tools.tof_manager import TOFManager
 
 config = load_config()
 

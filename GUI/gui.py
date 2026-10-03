@@ -164,15 +164,11 @@ class GUI(QWidget):
                 self.post_processing_thread = PostProcessingThread(
                     self.data_thread.raw_data_csv,
                     self.data_thread.camera_timestamp_csv,
-                    self.data_thread.output_folder,
+                    self.data_thread.output_folder
                 )
 
+                self.post_processing_thread.data_valid.connect(self.update_valid_data_label)
                 self.post_processing_thread.run()
-                self.is_data_valid = is_output_data_valid(
-                    self.file_manager.current_task, self.data_thread.video_output_path
-                )
-                self.update_valid_data_label(self.is_data_valid)
-
             self.pages.setCurrentWidget(self.post_task_page)
 
         complete_btn.clicked.connect(lambda checked=False: complete_task())

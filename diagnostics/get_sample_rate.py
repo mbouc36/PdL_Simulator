@@ -66,76 +66,53 @@ def get_average():
     return sum_of_window / len(serial_window)
 
 
-def get_sample_rate_from_csv(file, serial_time_index=0, camera_time_index=1):
-    """
-    Assuming time is a given index in a csv file
-    """
-    try:
-        with open(
-            file,
-            mode="r",
-            newline="",
-            encoding="utf-8",
-        ) as file:
-            reader = csv.reader(file)
-            next(reader)
-            serial_max_diff, camera_max_diff = 0, 0
-            serial_min_diff, camera_min_diff = (
-                float("inf"),
-                float("inf"),
-            )
-            previous_serial_time, previous_camera_time = None, None
-            serial_time_sum, camera_time_sum = 0, 0
+def get_time_stats_from_csv(file_path, column_index=0, scale=1.0, has_header=True):
+    """Calculate statistics for consecutive time differences in a CSV column."""
+    if column_index < 0:
+        raise ValueError("column_index must be non-negative")
 
-            num_samples = 0
-            for row in reader:
-                serial_time = int(row[serial_time_index])
-                camera_time = float(row[camera_time_index]) * 1000  # convert to ms
+    previous_time = None
+    total_diff = 0.0
+    min_diff = float("inf")
+    max_diff = float("-inf")
+    interval_count = 0
 
-                # Should only be for first value
-                if previous_serial_time is None and previous_camera_time is None:
-                    previous_serial_time = serial_time
-                    previous_camera_time = camera_time
-                    continue
+    with open(file_path, mode="r", newline="", encoding="utf-8") as file:
+        reader = csv.reader(file)
 
-                serial_time_diff = serial_time - previous_serial_time
-                camera_time_diff = camera_time - previous_camera_time
+        if has_header:
+            next(reader, None)
 
-                # Get totals to compute averages
-                num_samples += 1
-                serial_time_sum += serial_time_diff
-                camera_time_sum += camera_time_diff
+        for row in reader:
+            if not row:
+                continue
 
-                # Get max values
-                if serial_time_diff > serial_max_diff:
-                    serial_max_diff = serial_time_diff
+            try:
+                current_time = float(row[column_index]) * scale
+            except (IndexError, ValueError) as error:
+                raise ValueError(
+                    f"Invalid value at CSV line {reader.line_num}, "
+                    f"column {column_index}"
+                ) from error
 
-                if camera_time_diff > camera_max_diff:
-                    camera_max_diff = camera_time_diff
+            if previous_time is not None:
+                time_diff = current_time - previous_time
+                total_diff += time_diff
+                min_diff = min(min_diff, time_diff)
+                max_diff = max(max_diff, time_diff)
+                interval_count += 1
 
-                # Get min values
-                if serial_time_diff < serial_min_diff:
-                    serial_min_diff = serial_time_diff
+            previous_time = current_time
 
-                if camera_time_diff < camera_min_diff:
-                    camera_min_diff = camera_time_diff
+    if interval_count == 0:
+        raise ValueError("At least two time values are required")
 
-                previous_serial_time = serial_time
-                previous_camera_time = camera_time
-
-            average_serial_time = serial_time_sum / num_samples
-            average_camera_time = camera_time_sum / num_samples
-            print(
-                f"Average serial time (ms): {average_serial_time:.2f}, max: {serial_max_diff:.2f}, min: {serial_min_diff:.2f}"
-            )
-            print(
-                f"Average camera time (ms): {average_camera_time:.2f}, max: {camera_max_diff:.2f}, min: {camera_min_diff:.2f}"
-            )
-
-            return average_serial_time, average_camera_time
-
-    except Exception as e:
-        print(f"Failed to read sensor data from csv: {e}")
+    return {
+        "average": total_diff / interval_count,
+        "min": min_diff,
+        "max": max_diff,
+        "interval_count": interval_count,
+    }
 
 
 
