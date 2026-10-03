@@ -107,13 +107,21 @@ def get_time_stats_from_csv(file_path, column_index=0, scale=1.0, has_header=Tru
     if interval_count == 0:
         raise ValueError("At least two time values are required")
 
-    return {
-        "average": total_diff / interval_count,
-        "min": min_diff,
-        "max": max_diff,
-        "interval_count": interval_count,
-    }
+    average = total_diff / interval_count
 
+    min_value = min_diff
+
+    max_value = max_diff
+
+    count = interval_count
+
+    print(f"{file_path}:")
+    print(f"Average: {average:.3f}")
+    print(f"Min: {min_value:.3f}")
+    print(f"Max: {max_value:.3f}")
+    print(f"Interval Count: {count}")
+
+    return average
 
 
 def is_likely_clock_drift(
@@ -157,7 +165,7 @@ def is_likely_clock_drift(
     # Residual statistics
     p95_residual = np.percentile(residual_ms, 95)
     max_residual = np.max(residual_ms)
-    rmse = np.sqrt(np.mean(residual ** 2)) * 1000
+    rmse = np.sqrt(np.mean(residual**2)) * 1000
 
     print(f"Drift rate:       {slope * 1000:.2f} ms/s")
     print(f"R²:               {r_squared:.4f}")
@@ -170,8 +178,7 @@ def is_likely_clock_drift(
 
     # There must not be excessive unexplained timing error
     residual_valid = (
-        p95_residual <= max_p95_residual_ms
-        and max_residual <= max_residual_ms
+        p95_residual <= max_p95_residual_ms and max_residual <= max_residual_ms
     )
 
     if linear_drift and residual_valid:
@@ -187,6 +194,7 @@ def is_likely_clock_drift(
         print("  - Excessive timing error remains after removing drift.")
 
     return False
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

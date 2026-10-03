@@ -1,5 +1,4 @@
-
-import os 
+import os
 import sys
 import csv
 import numpy as np
@@ -9,7 +8,11 @@ from PyQt5.QtCore import QThread, pyqtSignal
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from tools.imu_orientation import IMUQuaternionTracker
 from tools.tof_manager import TOFManager
-from tools.get_files_from_folder import  get_raw_data_file, get_camera_data_file, get_processed_data_file
+from tools.get_files_from_folder import (
+    get_raw_data_file,
+    get_camera_data_file,
+    get_processed_data_file,
+)
 from diagnostics.validate_data import is_output_data_valid
 
 PROCESSED_CSV_COLUMNS = [
@@ -98,7 +101,6 @@ class PostProcessingThread(QThread):
 
                     target_arduino_time = self._camera_to_arduino_time(camera_time)
 
-
                     while (
                         sensor_idx + 1 < len(sensor_data)
                         and sensor_data[sensor_idx + 1][0] < target_arduino_time
@@ -162,6 +164,8 @@ class PostProcessingThread(QThread):
 
         finally:
             self.running = False
+            valid_output = is_output_data_valid(self.output_folder)
+            self.data_valid.emit(valid_output)
 
     def _load_sensor_data(self):
 
@@ -321,7 +325,6 @@ class PostProcessingThread(QThread):
 
         # Arduino milliseconds -> seconds
         arduino_time_seconds = arduino_time / 1000.0
-
 
         a, b = np.polyfit(
             arduino_time_seconds,
