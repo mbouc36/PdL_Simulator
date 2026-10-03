@@ -224,11 +224,9 @@ class GUI(QWidget):
 
         if self.data_thread is None:
             self.data_thread = DataThread(
-                self.file_manager.destination_folder, self.visualize
+                self.file_manager.destination_folder
             )
             self.data_thread.frame_ready.connect(self.update_video_frame)
-            if self.visualize:
-                self.data_thread.sensor_data.connect(self.update_visulization)
         else:
             self.data_thread.update_output_files(self.file_manager.destination_folder)
 

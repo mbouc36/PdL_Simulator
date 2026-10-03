@@ -77,11 +77,11 @@ CAMERA_TIMESTAMP_CSV_COLUMNS = [
 
 
 # Sensor Data
-IMU_INITIALIZATION_TIME = 15  # s
+IMU_INITIALIZATION_TIME = 10  # s
 
 
 class DataThread(QThread):
-
+ 
     frame_ready = pyqtSignal(object)
     sensors_ready = pyqtSignal(object)
 
