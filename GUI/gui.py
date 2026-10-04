@@ -142,7 +142,7 @@ class GUI(QWidget):
         stack_layout.setSpacing(0)
         stack_layout.setStackingMode(QStackedLayout.StackAll)
 
-        self.video_label = QLabel("Video not started")
+        self.video_label = QLabel("Waiting for sensors to initialize")
         self.video_label.setAlignment(Qt.AlignCenter)
         self.video_label.setStyleSheet("background-color: black; color: white;")
         self.video_label.setScaledContents(True)
@@ -167,6 +167,7 @@ class GUI(QWidget):
 
                 self.post_processing_thread.data_valid.connect(self.update_valid_data_label)
                 self.post_processing_thread.run()
+                self.video_label = QLabel("Waiting for sensors to initialize")
             self.pages.setCurrentWidget(self.post_task_page)
 
         complete_btn.clicked.connect(lambda checked=False: complete_task())
