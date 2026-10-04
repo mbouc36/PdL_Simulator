@@ -23,7 +23,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
 from tools.serial_parser import SerialParser
 
-STARTING_GAIN = 0.8
+STARTING_GAIN = 0.9
 SETTLED_GAIN = 0.041
 
 

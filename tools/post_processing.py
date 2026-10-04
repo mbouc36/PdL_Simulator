@@ -6,6 +6,7 @@ import numpy as np
 from PyQt5.QtCore import QThread, pyqtSignal
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from GUI.data_thread import IMU_INITIALIZATION_SAMPLES
 from tools.imu_orientation import IMUQuaternionTracker
 from tools.tof_manager import TOFManager
 from tools.get_files_from_folder import (
@@ -66,6 +67,22 @@ class PostProcessingThread(QThread):
             right_imu = IMUQuaternionTracker(name="right")
             tof_manager = TOFManager()
 
+            sensor_idx = 0
+
+            while sensor_idx < IMU_INITIALIZATION_SAMPLES:
+                line = sensor_data[sensor_idx]
+                arduino_time = line[0]
+                left_imu_values = [arduino_time] + line[5:14]
+                right_imu_values = [arduino_time] + line[14:]
+                sensor_idx += 1
+
+                left_imu.get_quaternion(left_imu_values)
+                right_imu.get_quaternion(right_imu_values)
+
+            left_imu.set_gain()
+            right_imu.set_gain()
+
+
             self.clock_a, self.clock_b = self.calculate_clock_mapping(sensor_data)
 
             print(
@@ -77,7 +94,6 @@ class PostProcessingThread(QThread):
             if self.clock_a == 0:
                 raise ValueError("Invalid clock mapping: slope is zero.")
 
-            sensor_idx = 0
             total_frames = len(camera_data)
 
             with open(

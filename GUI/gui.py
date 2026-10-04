@@ -590,10 +590,10 @@ class GUI(QWidget):
     def update_valid_data_label(self, condition):
         if condition:
             self.valid_data_label.setText("Valid")
-            self.valid_data_label.setStyleSheet("background-color: green;")
+            self.valid_data_label.setStyleSheet("color: green;")
         else:
             self.valid_data_label.setText("Invalid")
-            self.valid_data_label.setStyleSheet("background-color: red;")
+            self.valid_data_label.setStyleSheet("color: red;")
 
     def closeEvent(self, event):
         if self.data_thread is not None:

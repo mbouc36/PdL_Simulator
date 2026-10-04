@@ -77,13 +77,12 @@ CAMERA_TIMESTAMP_CSV_COLUMNS = [
 
 
 # Sensor Data
-IMU_INITIALIZATION_TIME = 10  # s
+IMU_INITIALIZATION_SAMPLES = 300
 
 
 class DataThread(QThread):
  
     frame_ready = pyqtSignal(object)
-    sensors_ready = pyqtSignal(object)
 
     def __init__(self, folder_name):
         super().__init__()
@@ -124,6 +123,7 @@ class DataThread(QThread):
         )
 
         self.serial_thread = SerialThread(self.raw_data_csv)
+        self.serial_thread.init_complete.connect(self.set_sensor_ready)
 
         self.frame_idx = 0
 
@@ -149,38 +149,46 @@ class DataThread(QThread):
 
         self.serial_thread.start()
 
-        cap = cv2.VideoCapture(0)
+        self.cap = cv2.VideoCapture(0)
 
         frame_width = 1920
         frame_height = 1080
         fps = 30.0
 
-        cap.set(
+        self.cap.set(
             cv2.CAP_PROP_BUFFERSIZE,
             1,
         )
 
-        cap.set(
+        self.cap.set(
             cv2.CAP_PROP_FRAME_WIDTH,
             frame_width,
         )
 
-        cap.set(
+        self.cap.set(
             cv2.CAP_PROP_FRAME_HEIGHT,
             frame_height,
         )
 
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
-        video_output = cv2.VideoWriter(
+        self.video_output = cv2.VideoWriter(
             self.video_output_path,
             fourcc,
             fps,
             (frame_width, frame_height),
         )
 
-        self.sensors_ready.emit(True)
+        # ensure sensor values are ready before continuing
+        while not self.sensors_ready: 
+            time.sleep(0.01)
 
+        self.load_camera_data()
+
+    def set_sensor_ready(self, value):
+        self.sensors_ready = value
+
+    def load_camera_data(self):
         try:
 
             with open(
@@ -194,7 +202,7 @@ class DataThread(QThread):
 
                 while self.running:
 
-                    ret, frame = cap.read()
+                    ret, frame = self.cap.read()
 
                     # Timestamp immediately after capture
                     camera_time = time.perf_counter()
@@ -203,7 +211,7 @@ class DataThread(QThread):
                         print("Error capturing frame")
                         continue
 
-                    video_output.write(frame)
+                    self.video_output.write(frame)
                     camera_writer.writerow(
                         [
                             self.frame_idx,
@@ -213,19 +221,16 @@ class DataThread(QThread):
 
                     
                     self.frame_ready.emit(frame)
-
                     self.frame_idx += 1
 
         except Exception as e:
-
             print(f"Camera acquisition error: {e}")
 
         finally:
-
-            video_output.release()
-            cap.release()
+            self.video_output.release()
+            self.cap.release()
             self.serial_thread.stop()
-            self.sensors_ready.emit(False)
+            self.sensors_ready = False
 
     def stop(self):
         self.running = False
@@ -234,11 +239,13 @@ class DataThread(QThread):
 
 
 class SerialThread(QThread):
+    init_complete = pyqtSignal(object)
 
     def __init__(self, raw_data_csv):
         super().__init__()
 
         self.running = False
+        self.init_samples = 0
         self.raw_data_csv = raw_data_csv
 
     def run(self):
@@ -300,6 +307,12 @@ class SerialThread(QThread):
                     ] + raw_sensor_data[1:]
 
                     writer.writerow(row)
+
+                    if self.init_samples < IMU_INITIALIZATION_SAMPLES:
+                        self.init_samples += 1
+                        if self.init_samples == IMU_INITIALIZATION_SAMPLES:
+                            self.init_complete.emit(True)
+
 
         finally:
             ser.close()
