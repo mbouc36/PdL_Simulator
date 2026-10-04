@@ -166,9 +166,10 @@ class GUI(QWidget):
                 )
 
                 self.post_processing_thread.data_valid.connect(self.update_valid_data_label)
-                self.post_processing_thread.run()
+                self.post_processing_thread.start()
                 self.video_label.clear()
                 self.video_label.setText("Waiting for sensors to initialize")
+                self.video_label.setStyleSheet("background-color: black; color: white;")
             self.pages.setCurrentWidget(self.post_task_page)
 
         complete_btn.clicked.connect(lambda checked=False: complete_task())
