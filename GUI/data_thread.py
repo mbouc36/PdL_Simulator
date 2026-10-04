@@ -81,7 +81,7 @@ IMU_INITIALIZATION_SAMPLES = 300
 
 
 class DataThread(QThread):
- 
+
     frame_ready = pyqtSignal(object)
 
     def __init__(self, folder_name):
@@ -180,7 +180,7 @@ class DataThread(QThread):
         )
 
         # ensure sensor values are ready before continuing
-        while not self.sensors_ready: 
+        while not self.sensors_ready:
             time.sleep(0.01)
 
         self.load_camera_data()
@@ -219,7 +219,6 @@ class DataThread(QThread):
                         ]
                     )
 
-                    
                     self.frame_ready.emit(frame)
                     self.frame_idx += 1
 
@@ -236,6 +235,24 @@ class DataThread(QThread):
         self.running = False
         self.serial_thread.stop()
         self.wait()
+
+    def set_output_folder(self, folder):
+        self.output_folder = folder
+        self.video_output_path = os.path.join(
+            self.output_folder,
+            VIDEO_FILENAME,
+        )
+
+        self.raw_data_csv = os.path.join(
+            self.output_folder,
+            RAW_SENSOR_CSV,
+        )
+
+        self.camera_timestamp_csv = os.path.join(
+            self.output_folder,
+            CAMERA_TIMESTAMP_CSV,
+        )
+        self.serial_thread.raw_data_csv = self.raw_data_csv
 
 
 class SerialThread(QThread):
