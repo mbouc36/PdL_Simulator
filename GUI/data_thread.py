@@ -124,7 +124,7 @@ class DataThread(QThread):
 
         self.serial_thread = SerialThread(self.raw_data_csv)
         self.serial_thread.init_complete.connect(self.set_sensor_ready)
-
+        self.sensors_ready = False
         self.frame_idx = 0
 
     def initialize_csv(self, file_path, columns):
@@ -312,6 +312,7 @@ class SerialThread(QThread):
                         self.init_samples += 1
                         if self.init_samples == IMU_INITIALIZATION_SAMPLES:
                             self.init_complete.emit(True)
+                            print("IMU init Complete")
 
 
         finally:
