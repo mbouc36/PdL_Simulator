@@ -10,7 +10,6 @@ import sys
 import csv
 import cv2
 import argparse
-import numpy as np
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap
@@ -34,6 +33,7 @@ LEFT_TOF_INDEX = 5
 
 RIGHT_Q_INDEX = 8
 RIGHT_TOF_INDEX = 6
+PLAYBACK_SPEED = 2
 
 
 class ReplayKinematicData(QWidget):
@@ -162,7 +162,7 @@ class ReplayKinematicData(QWidget):
         if fps <= 0:
             fps = 30
 
-        self.frame_interval_ms = max(1, int(1000 / fps))
+        self.frame_interval_ms = max(1, int(1000 / fps * PLAYBACK_SPEED))
 
         # Load first frame/data point
         self.load_index(0)
