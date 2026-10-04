@@ -25,7 +25,7 @@ from PyQt5.QtWidgets import (
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from diagnostics.visualization.tool_visualization import ToolVisualization
 
-NORTH_OFFSET = 0
+NORTH_OFFSET = 180
 
 # Change these indices to match your CSV.
 # Example assumes each visualization receives a quaternion [w, x, y, z].
@@ -208,9 +208,9 @@ class ReplayKinematicData(QWidget):
         )
 
         success, frame = self.capture.read()
-
         if success:
             self.update_video_frame(frame)
+
 
     def next_frame(self):
         """
