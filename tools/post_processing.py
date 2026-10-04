@@ -128,14 +128,17 @@ class PostProcessingThread(QThread):
                         after,
                     )
 
-                    load_cell_values = interpolated[1:3]
+                    load_cell_values = [
+                        round(interpolated[1], 2),
+                        round(interpolated[2], 2),
+                    ]
                     tof_values = interpolated[3:5]
                     left_imu_values = [target_arduino_time] + interpolated[5:14]
                     right_imu_values = [target_arduino_time] + interpolated[14:]
 
                     distances = list(tof_manager.get_distances(tof_values))
-                    left_quaternion = left_imu.get_quaternion(left_imu_values)
-                    right_quaternion = right_imu.get_quaternion(right_imu_values)
+                    left_quaternion = [left_imu.get_quaternion(left_imu_values)]
+                    right_quaternion = [right_imu.get_quaternion(right_imu_values)]
 
                     processed_data = (
                         [
@@ -145,8 +148,8 @@ class PostProcessingThread(QThread):
                         ]
                         + list(load_cell_values)
                         + distances
-                        + list(left_quaternion)
-                        + list(right_quaternion)
+                        + left_quaternion
+                        + right_quaternion
                     )
 
                     writer.writerow(processed_data)

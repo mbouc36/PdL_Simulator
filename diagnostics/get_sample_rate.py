@@ -224,5 +224,5 @@ if __name__ == "__main__":
         find_loop_frequency()
 
     else:
-        get_sample_rate_from_csv(args.name_file, args.serial_time_index)
+        get_time_stats_from_csv(args.name_file, args.serial_time_index)
         is_likely_clock_drift(args.name_file)
