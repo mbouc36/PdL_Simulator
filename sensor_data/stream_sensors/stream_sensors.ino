@@ -26,7 +26,7 @@ struct Snapshot{
 };
 
 
-#define PRINT_FREQUENCY 40 //Hz
+#define PRINT_FREQUENCY 60 //Hz
 unsigned long now;
 unsigned long last_print;
 const unsigned long period_ms = 1000/PRINT_FREQUENCY;

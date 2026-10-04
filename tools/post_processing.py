@@ -72,8 +72,8 @@ class PostProcessingThread(QThread):
             while sensor_idx < IMU_INITIALIZATION_SAMPLES:
                 line = sensor_data[sensor_idx]
                 arduino_time = line[0]
-                left_imu_values = [arduino_time] + line[5:14]
-                right_imu_values = [arduino_time] + line[14:]
+                left_imu_values = [arduino_time] + line[6:15]
+                right_imu_values = [arduino_time] + line[15:]
                 sensor_idx += 1
 
                 left_imu.get_quaternion(left_imu_values)

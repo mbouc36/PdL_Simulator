@@ -29,11 +29,11 @@ NORTH_OFFSET = 0
 
 # Change these indices to match your CSV.
 # Example assumes each visualization receives a quaternion [w, x, y, z].
-LEFT_Q_INDEX = 6
-LEFT_TOF_INDEX = 4
+LEFT_Q_INDEX = 7
+LEFT_TOF_INDEX = 5
 
-RIGHT_Q_INDEX = 7
-RIGHT_TOF_INDEX = 5
+RIGHT_Q_INDEX = 8
+RIGHT_TOF_INDEX = 6
 
 
 class ReplayKinematicData(QWidget):

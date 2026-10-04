@@ -220,9 +220,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if args.name_file is None:
+    if args.csv_file is None:
         find_loop_frequency()
 
     else:
-        get_time_stats_from_csv(args.name_file, args.serial_time_index)
-        is_likely_clock_drift(args.name_file)
+        get_time_stats_from_csv(args.csv_file, args.serial_time_index)
+        is_likely_clock_drift(args.csv_file)
