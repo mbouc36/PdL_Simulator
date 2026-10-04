@@ -314,10 +314,11 @@ class SerialThread(QThread):
                             self.init_complete.emit(True)
                             print("IMU init Complete")
 
-
         finally:
             ser.close()
 
     def stop(self):
         self.running = False
+        self.init_samples = 0
+        self.init_complete.emit(False)
         self.wait()

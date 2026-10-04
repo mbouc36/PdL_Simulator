@@ -228,7 +228,7 @@ class GUI(QWidget):
             )
             self.data_thread.frame_ready.connect(self.update_video_frame)
         else:
-            self.data_thread.update_output_files(self.file_manager.destination_folder)
+            self.data_thread.output_folder = self.file_manager.destination_folder
 
         self.data_thread.start()
 

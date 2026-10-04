@@ -64,7 +64,6 @@ class FileManager:
             return None
 
         children = [trial.name for trial in self.current_task.iterdir()]
-        print(children)
 
         if len(children) == 0:
             current_trial = Path(os.path.join(self.current_task, "001"))
