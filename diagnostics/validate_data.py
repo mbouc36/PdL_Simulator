@@ -46,7 +46,7 @@ def is_output_data_valid(output_folder) -> bool:
     output_data = get_processed_data_file(output_folder)
 
     serial_sample_rate = get_time_stats_from_csv(raw_data, has_header=True)
-    camera_sample_rate = get_time_stats_from_csv(camera_data, has_header=True)
+    camera_sample_rate = get_time_stats_from_csv(camera_data, column_index=1, has_header=True)
 
     if abs(serial_sample_rate - camera_sample_rate) > MAX_DIFF_SAMPLE_RATE:
         print("Large difference in camera and output sample rate")
