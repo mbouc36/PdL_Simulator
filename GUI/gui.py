@@ -8,7 +8,7 @@ Description: Script which contains class used to manage gui
 import sys
 import os
 import cv2
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer, QElapsedTimer
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (
     QWidget,
@@ -25,7 +25,6 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from diagnostics.visualization.tool_visualization import ToolVisualization
 from data_thread import DataThread
 from file_manager import FileManager
-from diagnostics.validate_data import is_output_data_valid
 from tools.post_processing import PostProcessingThread
 
 
@@ -67,6 +66,13 @@ class GUI(QWidget):
         }
         """
 
+        # Timer init
+        self.task_timer = QElapsedTimer()
+        self.timer_update = QTimer(self)
+        self.timer_update.setInterval(10)  # refresh display every 10 ms
+        self.timer_update.timeout.connect(self.update_task_timer)
+        self.task_elapsed_ms = 0
+
         # Create User Pages
         self.login_page = self.create_login_page()
         self.video_page = self.create_video_page()
@@ -89,6 +95,9 @@ class GUI(QWidget):
 
         self.file_manager = FileManager(name_to_key_file=name_to_key_file)
         self.is_data_valid = False
+
+
+
 
     def create_login_page(self):
         start_page = QWidget()
@@ -156,9 +165,10 @@ class GUI(QWidget):
         overlay_layout.setSpacing(0)
 
         complete_btn = QPushButton("Complete Task")
-        complete_btn.setFixedSize(120, 50)
+        complete_btn.setFixedSize(220, 100)
 
         def complete_task():
+            self.stop_task_timer()
             if not self.test_mode:
                 self.data_thread.stop()
                 self.post_processing_thread = PostProcessingThread(
@@ -167,6 +177,11 @@ class GUI(QWidget):
 
                 self.post_processing_thread.data_valid.connect(self.update_valid_data_label)
                 self.post_processing_thread.start()
+                # Update post-task timer display
+
+            self.post_task_timer_label.setText(
+                f"Task Time: {self.format_elapsed_time(self.task_elapsed_ms)}"
+            )
             self.pages.setCurrentWidget(self.post_task_page)
 
         complete_btn.clicked.connect(lambda checked=False: complete_task())
@@ -177,12 +192,47 @@ class GUI(QWidget):
                 color: black;
                 border: 1px solid #D8D0C0;
                 border-radius: 12px;
-                font-size: 16px;
+                font-size: 30px;
                 font-family: "Times New Roman";
             }
         """)
 
-        overlay_layout.addWidget(complete_btn, alignment=Qt.AlignTop | Qt.AlignRight)
+        # Timer
+        self.timer_label = QLabel("00.00.00")
+        self.timer_label.setAlignment(Qt.AlignCenter)
+
+        self.timer_label.setStyleSheet("""
+            QLabel {
+                background-color: #FFFFF0;
+                color: black;
+                border: 1px solid #D8D0C0;
+                border-radius: 12px;
+                padding: 20px 26px;
+                font-size: 48px;
+                font-family: "Times New Roman", Times, serif;
+                font-weight: bold;
+            }""")
+
+        self.timer_label.setFixedSize(220, 100)
+
+        # Top row containing Exit/Complete button and timer
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(0)
+
+        top_row.addWidget(
+            complete_btn,
+            alignment=Qt.AlignLeft | Qt.AlignVCenter
+        )
+        top_row.addStretch(1)
+        top_row.addWidget(
+            self.timer_label,
+            alignment=Qt.AlignRight | Qt.AlignVCenter
+        )
+
+        top_row.addStretch()
+
+        overlay_layout.addLayout(top_row)
         overlay_layout.addStretch()
         if self.visualize:
             self.left_imu_visualization = ToolVisualization(180)
@@ -510,6 +560,7 @@ class GUI(QWidget):
             self.reset_video_label()
             self.is_data_valid = False
             self.pages.setCurrentWidget(self.video_page)
+            self.start_task_timer()
             self.start_video()
 
         warm_up_btn.clicked.connect(lambda checked=False: set_task(FileManager.WARM_UP))
@@ -541,6 +592,19 @@ class GUI(QWidget):
         """
         post_task_page = QWidget()
         layout = QVBoxLayout()
+
+        self.post_task_timer_label = QLabel("Task Time: 00.00.00")
+        self.post_task_timer_label.setAlignment(Qt.AlignCenter)
+
+        self.post_task_timer_label.setStyleSheet("""
+            QLabel {
+                font-size: 28px;
+                font-weight: bold;
+                color: black;
+                font-family: "Times New Roman";
+                margin-bottom: 20px;
+            }
+        """)
 
         title = QLabel("Task Complete")
         title.setAlignment(Qt.AlignCenter)
@@ -576,6 +640,10 @@ class GUI(QWidget):
 
         layout.addStretch()
         layout.addWidget(title)
+        layout.addWidget(
+            self.post_task_timer_label,
+            alignment=Qt.AlignCenter
+        )
         layout.addWidget(new_task_btn, alignment=Qt.AlignCenter)
         layout.addWidget(logout_btn, alignment=Qt.AlignCenter)
         layout.addStretch()
@@ -611,3 +679,53 @@ class GUI(QWidget):
             self.data_thread.stop()
 
         event.accept()
+
+    def start_task_timer(self):
+        """Reset and start the task stopwatch."""
+        self.task_elapsed_ms = 0
+
+        self.task_timer.start()
+        self.timer_update.start()
+
+        self.timer_label.setText("00.00.00")
+
+
+    def stop_task_timer(self):
+        """Stop the stopwatch and save the final elapsed time."""
+        if self.task_timer.isValid():
+            self.task_elapsed_ms = self.task_timer.elapsed()
+
+        self.timer_update.stop()
+
+        # Make sure the final displayed value is exact
+        self.timer_label.setText(
+            self.format_elapsed_time(self.task_elapsed_ms)
+        )
+
+
+    def update_task_timer(self):
+        """Update the stopwatch displayed on the video page."""
+        if not self.task_timer.isValid():
+            return
+
+        elapsed_ms = self.task_timer.elapsed()
+
+        self.timer_label.setText(
+            self.format_elapsed_time(elapsed_ms)
+        )
+
+
+    def format_elapsed_time(self, elapsed_ms):
+        """
+        Format milliseconds as:
+
+            MM.SS.CC
+
+        where CC is hundredths of a second.
+        """
+
+        minutes = elapsed_ms // 60000
+        seconds = (elapsed_ms % 60000) // 1000
+        hundredths = (elapsed_ms % 1000) // 10
+
+        return f"{minutes:02d}.{seconds:02d}.{hundredths:02d}"
