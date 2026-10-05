@@ -230,8 +230,7 @@ class GUI(QWidget):
             alignment=Qt.AlignRight | Qt.AlignVCenter
         )
 
-        top_row.addStretch()
-
+        overlay_layout.setContentsMargins(5, 5, 5, 5)
         overlay_layout.addLayout(top_row)
         overlay_layout.addStretch()
         if self.visualize:
