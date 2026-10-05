@@ -401,7 +401,7 @@ class GUI(QWidget):
             error_label.setText("")
             name_box.clear()
             self.name = name
-            self.key_label.setText(str(self.file_manager.key))
+            self.key_label.setText(f"User Key: {self.file_manager.key}")
             self.pages.setCurrentWidget(self.task_menu_page)
             return
 
@@ -501,7 +501,7 @@ class GUI(QWidget):
             # Clear any previous error
             error_label.setText("")
             self.key = key
-            self.key_label.setText(str(self.file_manager.key))
+            self.key_label.setText(f"User Key: {self.file_manager.key}")
             self.pages.setCurrentWidget(self.task_menu_page)
             return
 
@@ -643,7 +643,7 @@ class GUI(QWidget):
             btn.setStyleSheet(self.btn_style)
 
         def go_to_task_menu_page():
-            self.key_label.setText(str(self.file_manager.key))
+            self.key_label.setText(f"User Key: {self.file_manager.key}")
             self.pages.setCurrentWidget(self.task_menu_page)
 
         new_task_btn.clicked.connect(
