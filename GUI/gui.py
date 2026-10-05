@@ -214,7 +214,7 @@ class GUI(QWidget):
                 font-weight: bold;
             }""")
 
-        self.timer_label.setFixedSize(440, 190)
+        self.timer_label.setFixedSize(440, 150)
 
         # Top row containing Exit/Complete button and timer
         top_row = QHBoxLayout()
@@ -672,9 +672,10 @@ class GUI(QWidget):
     def reset_video_label(self):
         self.video_label.clear()
         self.video_label.setPixmap(QPixmap())  # explicitly remove pixmap
-        self.video_label.setText("Waiting for sensors to initialize")
+        self.video_label.setText("Waiting for Sensors to Initialize...")
         self.video_label.setStyleSheet(
             "background-color: black; color: white;"
+            "font: 24px" 
 
         )
         self.video_label.repaint()
