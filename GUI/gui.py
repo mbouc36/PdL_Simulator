@@ -167,9 +167,6 @@ class GUI(QWidget):
 
                 self.post_processing_thread.data_valid.connect(self.update_valid_data_label)
                 self.post_processing_thread.start()
-                self.video_label.clear()
-                self.video_label.setText("Waiting for sensors to initialize")
-                self.video_label.setStyleSheet("background-color: black; color: white;")
             self.pages.setCurrentWidget(self.post_task_page)
 
         complete_btn.clicked.connect(lambda checked=False: complete_task())
@@ -510,9 +507,10 @@ class GUI(QWidget):
 
         def set_task(task):
             self.file_manager.update_destination_folder(task)
-            self.start_video()
+            self.reset_video_label()
             self.is_data_valid = False
             self.pages.setCurrentWidget(self.video_page)
+            self.start_video()
 
         warm_up_btn.clicked.connect(lambda checked=False: set_task(FileManager.WARM_UP))
         peg_transfer_btn.clicked.connect(
@@ -597,6 +595,16 @@ class GUI(QWidget):
         else:
             self.valid_data_label.setText("Invalid")
             self.valid_data_label.setStyleSheet("color: red;")
+
+    def reset_video_label(self):
+        self.video_label.clear()
+        self.video_label.setPixmap(QPixmap())  # explicitly remove pixmap
+        self.video_label.setText("Waiting for sensors to initialize")
+        self.video_label.setStyleSheet(
+            "background-color: black; color: white;"
+
+        )
+        self.video_label.repaint()
 
     def closeEvent(self, event):
         if self.data_thread is not None:
