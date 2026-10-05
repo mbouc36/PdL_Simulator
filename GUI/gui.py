@@ -164,8 +164,8 @@ class GUI(QWidget):
         overlay_layout.setContentsMargins(20, 20, 20, 20)
         overlay_layout.setSpacing(0)
 
-        complete_btn = QPushButton("Complete Task")
-        complete_btn.setFixedSize(420, 200)
+        complete_btn = QPushButton("Finish")
+        complete_btn.setFixedSize(200, 100)
 
         def complete_task():
             self.stop_task_timer()
@@ -192,7 +192,7 @@ class GUI(QWidget):
                 color: black;
                 border: 1px solid #D8D0C0;
                 border-radius: 12px;
-                font-size: 30px;
+                font-size: 50px;
                 font-family: "Times New Roman";
             }
         """)
@@ -208,12 +208,12 @@ class GUI(QWidget):
                 border: 1px solid #D8D0C0;
                 border-radius: 5px;
                 padding: 5px 5px;
-                font-size: 78px;
+                font-size: 100px;
                 font-family: "Times New Roman", Times, serif;
                 font-weight: bold;
             }""")
 
-        self.timer_label.setFixedSize(420, 200)
+        self.timer_label.setFixedSize(440, 190)
 
         # Top row containing Exit/Complete button and timer
         top_row = QHBoxLayout()
@@ -222,7 +222,7 @@ class GUI(QWidget):
 
         top_row.addWidget(
             complete_btn,
-            alignment=Qt.AlignLeft | Qt.AlignVCenter
+            alignment=Qt.AlignLeft | Qt.AlignTop
         )
         top_row.addStretch(1)
         top_row.addWidget(
