@@ -13,12 +13,10 @@ import time
 import serial
 from pathlib import Path
 
-from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker
+from PyQt5.QtCore import QThread, pyqtSignal
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
-from tools.imu_orientation import IMUQuaternionTracker
-from tools.tof_manager import TOFManager
 
 config = load_config()
 
@@ -33,7 +31,8 @@ OUTPUT_DATA_FOLDER = os.path.join(
 VIDEO_FILENAME = "video.mp4"
 RAW_SENSOR_CSV = "raw_sensor_data.csv"
 RAW_SENSOR_CSV_COLUMNS = [
-    "Time",
+    "Arduino Time",
+    "PC Receive Time",
     "Front Weight",
     "Back Weight",
     "Raw Left Surge",
@@ -58,6 +57,7 @@ RAW_SENSOR_CSV_COLUMNS = [
     "Right IMU Mag Z",
 ]
 PROCESSED_DATA_CSV = "processed_data.csv"
+CAMERA_TIMESTAMP_CSV = "camera_timestamps.csv"
 PROCESSED_CSV_COLUMNS = [
     "Arduino Time",
     "Camera Time",
@@ -69,190 +69,273 @@ PROCESSED_CSV_COLUMNS = [
     "Right Quaternion",
 ]
 
-# CSV File Data
-NAME_COLUMN = "Name"
-KEY_COLUMN = "Key"
+
+CAMERA_TIMESTAMP_CSV_COLUMNS = [
+    "Frame",
+    "Camera Time",
+]
+
 
 # Sensor Data
-IMU_INITIALIZATION_TIME = 15  # s
-
-
-class SharedData:
-    def __init__(self):
-        self.mutex = QMutex()
-        self.latest_value = None
-
-    def set_value(self, value):
-        with QMutexLocker(self.mutex):
-            self.latest_value = value
-
-    def get_value(self):
-        with QMutexLocker(self.mutex):
-            return self.latest_value
+IMU_INITIALIZATION_SAMPLES = 300
 
 
 class DataThread(QThread):
+
     frame_ready = pyqtSignal(object)
-    sensors_ready = pyqtSignal(object)
-    sensor_data = pyqtSignal(object)
 
-    def __init__(self, folder_name, visualize):
+    def __init__(self, folder_name):
         super().__init__()
-        self.running = False
-        self.output_folder = os.path.join(OUTPUT_DATA_FOLDER, folder_name)
-        # Define the folder path
-        folder_path = Path(self.output_folder)
 
-        # Create the folder safely
+        self.running = False
+
+        self.output_folder = os.path.join(
+            OUTPUT_DATA_FOLDER,
+            folder_name,
+        )
+
+        folder_path = Path(self.output_folder)
         folder_path.mkdir(parents=True, exist_ok=True)
 
-        self.video_output_path = os.path.join(self.output_folder, VIDEO_FILENAME)
-        self.raw_data_csv = os.path.join(self.output_folder, RAW_SENSOR_CSV)
-        self.processed_data_csv = os.path.join(self.output_folder, PROCESSED_DATA_CSV)
-        self.write_to_csv(self.raw_data_csv, RAW_SENSOR_CSV_COLUMNS)
-        self.write_to_csv(self.processed_data_csv, PROCESSED_CSV_COLUMNS)
+        self.video_output_path = os.path.join(
+            self.output_folder,
+            VIDEO_FILENAME,
+        )
 
+        self.raw_data_csv = os.path.join(
+            self.output_folder,
+            RAW_SENSOR_CSV,
+        )
+
+        self.camera_timestamp_csv = os.path.join(
+            self.output_folder,
+            CAMERA_TIMESTAMP_CSV,
+        )
+
+        self.initialize_csv(
+            self.raw_data_csv,
+            RAW_SENSOR_CSV_COLUMNS,
+        )
+
+        self.initialize_csv(
+            self.camera_timestamp_csv,
+            CAMERA_TIMESTAMP_CSV_COLUMNS,
+        )
+
+        self.serial_thread = SerialThread(self.raw_data_csv)
+        self.serial_thread.init_complete.connect(self.set_sensor_ready)
+        self.sensors_ready = False
         self.frame_idx = 0
-        self.visualize = visualize
 
-        self.shm = SharedData()
-        self.serial_thread = SerialThread(self.shm)
+    def initialize_csv(self, file_path, columns):
 
-    def write_to_csv(self, filen_path, values):
         try:
             with open(
-                filen_path,
-                mode="a",
+                file_path,
+                mode="w",
                 newline="",
                 encoding="utf-8",
             ) as file:
+
                 writer = csv.writer(file)
-                writer.writerow(values)
+                writer.writerow(columns)
+
         except Exception as e:
-            print(f"Failed to write sensor data to csv: {e}")
+            print(f"Failed to initialize CSV {file_path}: {e}")
 
     def run(self):
+
         self.running = True
 
-        # Initialize the tracker
-        left_imu = IMUQuaternionTracker(name="left")
-        right_imu = IMUQuaternionTracker(name="right")
-
-        # Initialize tof manager
-        tof_manager = TOFManager()
         self.serial_thread.start()
-        init_start_time = time.monotonic()
 
-        while time.monotonic() - init_start_time < IMU_INITIALIZATION_TIME:
-            raw_sensor_data = self.shm.get_value()
-            if raw_sensor_data is None:
-                continue
+        self.cap = cv2.VideoCapture(0)
 
-            arduino_time = raw_sensor_data[0]
-            left_imu_values = [arduino_time] + raw_sensor_data[5:14]
-            right_imu_values = [arduino_time] + raw_sensor_data[14:]
-            left_quaternions = [left_imu.get_quaternion(left_imu_values)]
-            right_quaternions = [right_imu.get_quaternion(right_imu_values)]
-
-        left_imu.set_gain()
-        right_imu.set_gain()
-        self.sensors_ready.emit(True)
-
-        cap = cv2.VideoCapture(0)
         frame_width = 1920
         frame_height = 1080
-        fps = 30.0  # Set a default FPS
+        fps = 30.0
 
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, frame_width)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, frame_height)
-
-        # Define codec and VideoWriter object (uses 'mp4v' for MP4)
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        video_output = cv2.VideoWriter(
-            self.video_output_path, fourcc, fps, (frame_width, frame_height)
+        self.cap.set(
+            cv2.CAP_PROP_BUFFERSIZE,
+            1,
         )
 
-        while self.running:
+        self.cap.set(
+            cv2.CAP_PROP_FRAME_WIDTH,
+            frame_width,
+        )
 
-            ret, frame = cap.read()
-            camera_time = time.perf_counter()
-            if not ret:
-                print("Error capturing frame")
-                continue
+        self.cap.set(
+            cv2.CAP_PROP_FRAME_HEIGHT,
+            frame_height,
+        )
 
-            raw_sensor_data = self.shm.get_value()
-            if raw_sensor_data is None:
-                print("Failed to retrieve raw sensor data")
-                continue
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
-            self.frame_ready.emit(frame)
+        self.video_output = cv2.VideoWriter(
+            self.video_output_path,
+            fourcc,
+            fps,
+            (frame_width, frame_height),
+        )
 
-            # Write to video file
-            video_output.write(frame)
+        # ensure sensor values are ready before continuing
+        while not self.sensors_ready:
+            time.sleep(0.01)
 
-            arduino_time = raw_sensor_data[0]
-            load_cell_values = raw_sensor_data[1:3]
-            tof_values = raw_sensor_data[3:5]
-            left_imu_values = [arduino_time] + raw_sensor_data[5:14]
-            right_imu_values = [arduino_time] + raw_sensor_data[14:]
+        self.load_camera_data()
 
-            distances = list(tof_manager.get_distances(tof_values))
-            left_quaternions = [left_imu.get_quaternion(left_imu_values)]
-            right_quaternions = [right_imu.get_quaternion(right_imu_values)]
+    def set_sensor_ready(self, value):
+        self.sensors_ready = value
 
-            # Ensure all values are the same format
-            processed_data = (
-                [arduino_time]
-                + [camera_time]
-                + list(load_cell_values)
-                + distances
-                + left_quaternions
-                + right_quaternions
-            )
+    def load_camera_data(self):
+        try:
 
-            # load to csv
-            self.write_to_csv(self.processed_data_csv, processed_data)
-            self.write_to_csv(self.raw_data_csv, raw_sensor_data)
+            with open(
+                self.camera_timestamp_csv,
+                mode="a",
+                newline="",
+                encoding="utf-8",
+            ) as camera_csv:
 
-            # visualize
-            if self.visualize:
-                self.sensor_data.emit(processed_data)
+                camera_writer = csv.writer(camera_csv)
 
-        video_output.release()
-        cap.release()
+                while self.running:
+
+                    ret, frame = self.cap.read()
+
+                    # Timestamp immediately after capture
+                    camera_time = time.perf_counter()
+
+                    if not ret:
+                        print("Error capturing frame")
+                        continue
+
+                    self.video_output.write(frame)
+                    camera_writer.writerow(
+                        [
+                            self.frame_idx,
+                            camera_time,
+                        ]
+                    )
+
+                    self.frame_ready.emit(frame)
+                    self.frame_idx += 1
+
+        except Exception as e:
+            print(f"Camera acquisition error: {e}")
+
+        finally:
+            self.video_output.release()
+            self.cap.release()
+            self.serial_thread.stop()
+            self.sensors_ready = False
 
     def stop(self):
         self.running = False
-        self.serial_thread.running = False
-        self.sensors_ready.emit(False)
+        self.serial_thread.stop()
         self.wait()
+
+    def set_output_folder(self, folder):
+        self.output_folder = folder
+        self.video_output_path = os.path.join(
+            self.output_folder,
+            VIDEO_FILENAME,
+        )
+
+        self.raw_data_csv = os.path.join(
+            self.output_folder,
+            RAW_SENSOR_CSV,
+        )
+
+        self.camera_timestamp_csv = os.path.join(
+            self.output_folder,
+            CAMERA_TIMESTAMP_CSV,
+        )
+        self.serial_thread.raw_data_csv = self.raw_data_csv
 
 
 class SerialThread(QThread):
-    def __init__(self, shm: SharedData):
+    init_complete = pyqtSignal(object)
+
+    def __init__(self, raw_data_csv):
         super().__init__()
+
         self.running = False
-        self.shm = shm
+        self.init_samples = 0
+        self.raw_data_csv = raw_data_csv
 
     def run(self):
+
         self.running = True
-        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
 
-        while self.running:
-            try:
-                line = ser.readline().decode("utf-8").strip()  # wait till new line
-            except Exception as e:
-                print(e)
-                continue
+        try:
+            ser = serial.Serial(
+                SERIAL_PORT,
+                BAUD_RATE,
+                timeout=1,
+            )
 
-            if not line:
-                continue
+        except Exception as e:
+            print(f"Failed to open serial port: {e}")
+            return
 
-            raw_sensor_data = line.split(",")
-            if len(raw_sensor_data) != len(RAW_SENSOR_CSV_COLUMNS):
-                print("Invalid line")
-                continue
+        try:
 
-            self.shm.set_value(raw_sensor_data)
+            with open(
+                self.raw_data_csv,
+                mode="a",
+                newline="",
+                encoding="utf-8",
+            ) as raw_csv:
+
+                writer = csv.writer(raw_csv)
+
+                while self.running:
+
+                    try:
+                        # Wait for complete Arduino packet
+                        line = ser.readline()
+
+                        # Timestamp packet arrival on PC
+                        pc_receive_time = time.perf_counter()
+
+                        # Decode packet
+                        line = line.decode("utf-8").strip()
+
+                    except Exception as e:
+                        print(f"Serial read error: {e}")
+                        continue
+
+                    if not line:
+                        continue
+
+                    raw_sensor_data = line.split(",")
+
+                    # Arduino sends 23 values
+                    if len(raw_sensor_data) != len(RAW_SENSOR_CSV_COLUMNS) - 1:
+                        print("Invalid Arduino line:", line)
+                        continue
+
+                    # Add PC timestamp to the row
+                    row = [
+                        raw_sensor_data[0],  # Arduino Time
+                        pc_receive_time,  # PC Receive Time
+                    ] + raw_sensor_data[1:]
+
+                    writer.writerow(row)
+
+                    if self.init_samples < IMU_INITIALIZATION_SAMPLES:
+                        self.init_samples += 1
+                        if self.init_samples == IMU_INITIALIZATION_SAMPLES:
+                            self.init_complete.emit(True)
+                            print("IMU init Complete")
+
+        finally:
+            ser.close()
+
+    def stop(self):
+        self.running = False
+        self.init_samples = 0
+        self.init_complete.emit(False)
+        self.wait()

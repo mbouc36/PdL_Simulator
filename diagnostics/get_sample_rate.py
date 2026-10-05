@@ -28,6 +28,7 @@ config = load_config()
 SERIAL_PORT = config["serial_port"]
 BAUD_RATE = config["baud_rate"]
 WINDOW_LENGTH = 10
+FPS = 30
 
 
 def find_loop_frequency():
@@ -65,127 +66,134 @@ def get_average():
     return sum_of_window / len(serial_window)
 
 
-def get_sample_rate_from_csv(file, serial_time_index=0, camera_time_index=1):
-    """
-    Assuming time is a given index in a csv file
-    """
-    try:
-        with open(
-            file,
-            mode="r",
-            newline="",
-            encoding="utf-8",
-        ) as file:
-            reader = csv.reader(file)
-            next(reader)
-            serial_max_diff, camera_max_diff = 0, 0
-            serial_min_diff, camera_min_diff = (
-                float("inf"),
-                float("inf"),
-            )
-            previous_serial_time, previous_camera_time = None, None
-            serial_time_sum, camera_time_sum = 0, 0
+def get_time_stats_from_csv(file_path, column_index=0, scale=1.0, has_header=True):
+    """Calculate statistics for consecutive time differences in a CSV column."""
+    if column_index < 0:
+        raise ValueError("column_index must be non-negative")
 
-            num_samples = 0
-            for row in reader:
-                serial_time = int(row[serial_time_index])
-                camera_time = float(row[camera_time_index]) * 1000  # convert to ms
+    previous_time = None
+    total_diff = 0.0
+    min_diff = float("inf")
+    max_diff = float("-inf")
+    interval_count = 0
 
-                # Should only be for first value
-                if previous_serial_time is None and previous_camera_time is None:
-                    previous_serial_time = serial_time
-                    previous_camera_time = camera_time
-                    continue
+    with open(file_path, mode="r", newline="", encoding="utf-8") as file:
+        reader = csv.reader(file)
 
-                serial_time_diff = serial_time - previous_serial_time
-                camera_time_diff = camera_time - previous_camera_time
+        if has_header:
+            next(reader, None)
 
-                # Get totals to compute averages
-                num_samples += 1
-                serial_time_sum += serial_time_diff
-                camera_time_sum += camera_time_diff
+        for row in reader:
+            if not row:
+                continue
 
-                # Get max values
-                if serial_time_diff > serial_max_diff:
-                    serial_max_diff = serial_time_diff
+            try:
+                current_time = float(row[column_index]) * scale
+            except (IndexError, ValueError) as error:
+                raise ValueError(
+                    f"Invalid value at CSV line {reader.line_num}, "
+                    f"column {column_index}"
+                ) from error
 
-                if camera_time_diff > camera_max_diff:
-                    camera_max_diff = camera_time_diff
+            if previous_time is not None:
+                time_diff = current_time - previous_time
+                total_diff += time_diff
+                min_diff = min(min_diff, time_diff)
+                max_diff = max(max_diff, time_diff)
+                interval_count += 1
 
-                # Get min values
-                if serial_time_diff < serial_min_diff:
-                    serial_min_diff = serial_time_diff
+            previous_time = current_time
 
-                if camera_time_diff < camera_min_diff:
-                    camera_min_diff = camera_time_diff
+    if interval_count == 0:
+        raise ValueError("At least two time values are required")
 
-                previous_serial_time = serial_time
-                previous_camera_time = camera_time
+    average = total_diff / interval_count
 
-            average_serial_time = serial_time_sum / num_samples
-            average_camera_time = camera_time_sum / num_samples
-            print(
-                f"Average serial time (ms): {average_serial_time:.2f}, max: {serial_max_diff:.2f}, min: {serial_min_diff:.2f}"
-            )
-            print(
-                f"Average camera time (ms): {average_camera_time:.2f}, max: {camera_max_diff:.2f}, min: {camera_min_diff:.2f}"
-            )
+    min_value = min_diff
 
-            return average_serial_time, average_camera_time
+    max_value = max_diff
 
-    except Exception as e:
-        print(f"Failed to read sensor data from csv: {e}")
+    count = interval_count
+
+    print(f"{file_path}:")
+    print(f"Average: {average:.3f}")
+    print(f"Min: {min_value:.3f}")
+    print(f"Max: {max_value:.3f}")
+    print(f"Interval Count: {count}")
+
+    return average
 
 
-def get_camera_arduino_drift(file, train_data_percentage=0.70):
+def is_likely_clock_drift(
+    file,
+    min_r_squared=0.80,
+    max_residual_ms=100,
+    max_p95_residual_ms=70,
+):
     """
     Measure difference between arduino time and camera time and detemermine if the
     difference can be measured as a linear offset
 
     Returns true if the data is validated
     """
-
     df = pd.read_csv(file)
 
     arduino = df["Arduino Time"].to_numpy() / 1000
     camera = df["Camera Time"].to_numpy()
 
+    # Start both clocks at zero
     arduino = arduino - arduino[0]
     camera = camera - camera[0]
 
+    # Difference between the clocks
     error = camera - arduino
 
-    split = int(len(error) * train_data_percentage)
+    # Fit linear clock drift
+    slope, intercept = np.polyfit(arduino, error, 1)
+    predicted_error = slope * arduino + intercept
 
-    slope, intercept = np.polyfit(arduino[:split], error[:split], 1)
+    # Timing difference NOT explained by linear drift
+    residual = error - predicted_error
+    residual_ms = np.abs(residual) * 1000
 
-    predicted_error = slope * arduino[split:] + intercept
-
-    residual = error[split:] - predicted_error
-
-    mean_residual = round(np.mean(residual) * 1000, 2)
-
-    print("Drift rate:", round(slope * 1000, 2), "ms/s")
-
-    # Mean difference between predicted and acctual drift
-    print("Mean residual:", mean_residual, "ms")
-    print("Residual std:", round(np.std(residual) * 1000, 2), "ms")
-    print("Maximum residual:", round(np.max(np.abs(residual)) * 1000, 2), "ms")
-
-
-    actual_error = error[split:]
-
-    ss_res = np.sum((actual_error - predicted_error) ** 2)
-    ss_tot = np.sum((actual_error - np.mean(actual_error)) ** 2)
+    # How well does linear drift explain the error?
+    ss_res = np.sum((error - predicted_error) ** 2)
+    ss_tot = np.sum((error - np.mean(error)) ** 2)
 
     r_squared = 1 - (ss_res / ss_tot)
 
-    print("Test R²:", round(r_squared, 4))
+    # Residual statistics
+    p95_residual = np.percentile(residual_ms, 95)
+    max_residual = np.max(residual_ms)
+    rmse = np.sqrt(np.mean(residual**2)) * 1000
 
-    if r_squared > 0.90 and mean_residual < 33.3:
+    print(f"Drift rate:       {slope * 1000:.2f} ms/s")
+    print(f"R²:               {r_squared:.4f}")
+    print(f"Residual RMSE:    {rmse:.2f} ms")
+    print(f"95% residual:     {p95_residual:.2f} ms")
+    print(f"Maximum residual: {max_residual:.2f} ms")
+
+    # Drift must be sufficiently linear
+    linear_drift = r_squared >= min_r_squared
+
+    # There must not be excessive unexplained timing error
+    residual_valid = (
+        p95_residual <= max_p95_residual_ms and max_residual <= max_residual_ms
+    )
+
+    if linear_drift and residual_valid:
+        print("PASS: Difference is consistent with linear clock drift.")
         return True
-    else:
-        return False
+
+    print("FAIL: Difference cannot be explained sufficiently by clock drift.")
+
+    if not linear_drift:
+        print("  - Drift is not sufficiently linear.")
+
+    if not residual_valid:
+        print("  - Excessive timing error remains after removing drift.")
+
+    return False
 
 
 if __name__ == "__main__":
@@ -195,11 +203,11 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "-f",
-        "--name_file",
+        "--csv_file",
         type=Path,
         required=False,
         default=None,
-        help="Path to the name to key file",
+        help="Path to data output csv file",
     )
 
     parser.add_argument(
@@ -212,9 +220,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if args.name_file is None:
+    if args.csv_file is None:
         find_loop_frequency()
 
     else:
-        get_sample_rate_from_csv(args.name_file, args.serial_time_index)
-        get_camera_arduino_drift(args.name_file)
+        get_time_stats_from_csv(args.csv_file, args.serial_time_index)
+        is_likely_clock_drift(args.csv_file)

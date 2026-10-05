@@ -10,7 +10,6 @@ import sys
 import csv
 import cv2
 import argparse
-import numpy as np
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap
@@ -25,15 +24,16 @@ from PyQt5.QtWidgets import (
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from diagnostics.visualization.tool_visualization import ToolVisualization
 
-NORTH_OFFSET = 0
+NORTH_OFFSET = 180
 
 # Change these indices to match your CSV.
 # Example assumes each visualization receives a quaternion [w, x, y, z].
-LEFT_Q_INDEX = 6
-LEFT_TOF_INDEX = 4
+LEFT_Q_INDEX = 7
+LEFT_TOF_INDEX = 5
 
-RIGHT_Q_INDEX = 7
-RIGHT_TOF_INDEX = 5
+RIGHT_Q_INDEX = 8
+RIGHT_TOF_INDEX = 6
+PLAYBACK_SPEED = 2
 
 
 class ReplayKinematicData(QWidget):
@@ -162,7 +162,7 @@ class ReplayKinematicData(QWidget):
         if fps <= 0:
             fps = 30
 
-        self.frame_interval_ms = max(1, int(1000 / fps))
+        self.frame_interval_ms = max(1, int(1000 / fps * PLAYBACK_SPEED))
 
         # Load first frame/data point
         self.load_index(0)
@@ -208,9 +208,9 @@ class ReplayKinematicData(QWidget):
         )
 
         success, frame = self.capture.read()
-
         if success:
             self.update_video_frame(frame)
+
 
     def next_frame(self):
         """

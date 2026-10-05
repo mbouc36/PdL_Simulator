@@ -8,12 +8,6 @@ Description: Script which contains class used to manage gui
 import sys
 import os
 import cv2
-import csv
-import time
-import pandas as pd
-from enum import Enum
-from pathlib import Path
-from datetime import date
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (
@@ -31,6 +25,9 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from diagnostics.visualization.tool_visualization import ToolVisualization
 from data_thread import DataThread
 from file_manager import FileManager
+from diagnostics.validate_data import is_output_data_valid
+from tools.post_processing import PostProcessingThread
+
 
 class GUI(QWidget):
     def __init__(self, name_to_key_file, test_mode=False, visualize=False):
@@ -42,7 +39,6 @@ class GUI(QWidget):
         self.name = ""
         self.key = ""
         self.task_type = None
-        self.create_name_to_key_file(name_to_key_file)
         self.name_to_key_file = name_to_key_file
         self.visualize = visualize
 
@@ -92,6 +88,7 @@ class GUI(QWidget):
         """)
 
         self.file_manager = FileManager(name_to_key_file=name_to_key_file)
+        self.is_data_valid = False
 
     def create_login_page(self):
         start_page = QWidget()
@@ -145,7 +142,7 @@ class GUI(QWidget):
         stack_layout.setSpacing(0)
         stack_layout.setStackingMode(QStackedLayout.StackAll)
 
-        self.video_label = QLabel("Video not started")
+        self.video_label = QLabel("Waiting for sensors to initialize")
         self.video_label.setAlignment(Qt.AlignCenter)
         self.video_label.setStyleSheet("background-color: black; color: white;")
         self.video_label.setScaledContents(True)
@@ -162,7 +159,17 @@ class GUI(QWidget):
         complete_btn.setFixedSize(120, 50)
 
         def complete_task():
-            self.data_thread.stop()
+            if not self.test_mode:
+                self.data_thread.stop()
+                self.post_processing_thread = PostProcessingThread(
+                    self.data_thread.output_folder
+                )
+
+                self.post_processing_thread.data_valid.connect(self.update_valid_data_label)
+                self.post_processing_thread.start()
+                self.video_label.clear()
+                self.video_label.setText("Waiting for sensors to initialize")
+                self.video_label.setStyleSheet("background-color: black; color: white;")
             self.pages.setCurrentWidget(self.post_task_page)
 
         complete_btn.clicked.connect(lambda checked=False: complete_task())
@@ -219,10 +226,12 @@ class GUI(QWidget):
             return
 
         if self.data_thread is None:
-            self.data_thread = DataThread(self.file_manager.destination_folder, self.visualize)
+            self.data_thread = DataThread(
+                self.file_manager.destination_folder
+            )
             self.data_thread.frame_ready.connect(self.update_video_frame)
-            if self.visualize:
-                self.data_thread.sensor_data.connect(self.update_visulization)
+        else:
+            self.data_thread.set_output_folder(self.file_manager.destination_folder)
 
         self.data_thread.start()
 
@@ -330,13 +339,14 @@ class GUI(QWidget):
         new_user_page.setLayout(layout)
         self.pages.addWidget(new_user_page)
 
-        def validate_username():
+        def update_username():
             name = name_box.text().strip()
 
-            if not name or not self.is_name_valid(name):
+            if not name or not self.file_manager.is_name_valid(name):
                 error_label.setText("Please enter a valid name.")
                 return
 
+            self.file_manager.update_name_to_key_file(name=name)
             # Clear any previous error
             error_label.setText("")
             name_box.clear()
@@ -345,7 +355,7 @@ class GUI(QWidget):
             self.pages.setCurrentWidget(self.task_menu_page)
             return
 
-        next_btn.clicked.connect(lambda checked=False: validate_username())
+        next_btn.clicked.connect(lambda checked=False: update_username())
 
         return new_user_page
 
@@ -467,37 +477,59 @@ class GUI(QWidget):
             margin-bottom: 12px;
         """)
 
+        warm_up_btn = QPushButton("Warm Up")
         peg_transfer_btn = QPushButton("Peg Transfer")
+        precision_cutting_btn = QPushButton("Precision Cutting")
+        litigation_loop_btn = QPushButton("Litigation Loop")
         in_suturing_btn = QPushButton("Intracorporeal Suturing")
+        ex_suturing_btn = QPushButton("Extracorporeal Suturing")
 
-        for btn in [peg_transfer_btn, in_suturing_btn]:
+        buttons = [
+            warm_up_btn,
+            peg_transfer_btn,
+            precision_cutting_btn,
+            litigation_loop_btn,
+            in_suturing_btn,
+            ex_suturing_btn,
+        ]
+
+        layout.addStretch()
+        layout.addWidget(title)
+
+        for btn in buttons:
             btn.setFixedHeight(50)
             btn.setMinimumWidth(250)
             btn.setMaximumWidth(400)
             btn.setStyleSheet(self.btn_style)
+            layout.addWidget(btn, alignment=Qt.AlignCenter)
 
-        layout.addStretch()
-        layout.addWidget(title)
-        layout.addWidget(peg_transfer_btn, alignment=Qt.AlignCenter)
-        layout.addWidget(in_suturing_btn, alignment=Qt.AlignCenter)
         layout.addStretch()
 
         task_menu_page.setLayout(layout)
         self.pages.addWidget(task_menu_page)
 
-        def set_peg_transfer_task():
-            self.file_manager.update_destination_folder(FileManager.PEG_TRANSFER)
+        def set_task(task):
+            self.file_manager.update_destination_folder(task)
             self.start_video()
+            self.is_data_valid = False
             self.pages.setCurrentWidget(self.video_page)
 
-        def set_in_suturing_task():
-            self.file_manager.update_destination_folder(FileManager.INTRACORPOREAL_SUTURING)
-            self.start_video()
-            self.pages.setCurrentWidget(self.video_page)
-
-        peg_transfer_btn.clicked.connect(lambda checked=False: set_peg_transfer_task())
-
-        in_suturing_btn.clicked.connect(lambda checked=False: set_in_suturing_task())
+        warm_up_btn.clicked.connect(lambda checked=False: set_task(FileManager.WARM_UP))
+        peg_transfer_btn.clicked.connect(
+            lambda checked=False: set_task(FileManager.PEG_TRANSFER)
+        )
+        precision_cutting_btn.clicked.connect(
+            lambda checked=False: set_task(FileManager.PERCISION_CUTTING)
+        )
+        litigation_loop_btn.clicked.connect(
+            lambda checked=False: set_task(FileManager.LITIGATION_LOOP)
+        )
+        in_suturing_btn.clicked.connect(
+            lambda checked=False: set_task(FileManager.INTRACORPOREAL_SUTURING)
+        )
+        ex_suturing_btn.clicked.connect(
+            lambda checked=False: set_task(FileManager.EXTRACORPOREAL_SUTURING)
+        )
 
         return task_menu_page
 
@@ -525,7 +557,8 @@ class GUI(QWidget):
 
         new_task_btn = QPushButton("New Task")
         logout_btn = QPushButton("Logout")
-
+        # Label for depicting if data is valid
+        self.valid_data_label = QLabel("Unknown")
         for btn in [new_task_btn, logout_btn]:
             btn.setFixedHeight(50)
             btn.setMinimumWidth(250)
@@ -548,11 +581,22 @@ class GUI(QWidget):
         layout.addWidget(new_task_btn, alignment=Qt.AlignCenter)
         layout.addWidget(logout_btn, alignment=Qt.AlignCenter)
         layout.addStretch()
+        layout.addWidget(
+            self.valid_data_label, alignment=Qt.AlignBottom | Qt.AlignRight
+        )
 
         post_task_page.setLayout(layout)
         self.pages.addWidget(post_task_page)
 
         return post_task_page
+
+    def update_valid_data_label(self, condition):
+        if condition:
+            self.valid_data_label.setText("Valid")
+            self.valid_data_label.setStyleSheet("color: green;")
+        else:
+            self.valid_data_label.setText("Invalid")
+            self.valid_data_label.setStyleSheet("color: red;")
 
     def closeEvent(self, event):
         if self.data_thread is not None:

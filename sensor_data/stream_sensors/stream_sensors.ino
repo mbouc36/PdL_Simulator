@@ -26,7 +26,7 @@ struct Snapshot{
 };
 
 
-#define PRINT_FREQUENCY 40 //Hz
+#define PRINT_FREQUENCY 60 //Hz
 unsigned long now;
 unsigned long last_print;
 const unsigned long period_ms = 1000/PRINT_FREQUENCY;
@@ -47,7 +47,7 @@ float calibration_factor = -2150.0;
 // IMU 
 #define GYRO_CTRL_REGISTER 0b01000010 // Set gyro to 104 Hz sampling and 125 dps
 #define ACC_CTRL_REGISTER 0b01000000 // Set accelerometer to 104Hz sampling
-#define MAG_CTRL_REGISTER 0b00011100 // Set sampling to 80Hz
+#define MAG_CTRL_REGISTER 0b01111100 // Set sampling to 80Hz
 
 LSM6 imu6_left, imu6_right;
 LIS3MDL imu_mag_left, imu_mag_right;
@@ -61,21 +61,20 @@ float imu_sensitivity = 4.375/ 1000; // This is proportional to dps see data she
 #define TOF1_ADDR 0x30
 #define TOF2_ADDR 0x31
 
-#define CONTINUOUS_PERIOD 100
+#define TOF_CONTINUOUS_PERIOD 33
+#define TOF_TIMING_BUDGET 2000
+
+constexpr float ACC_G_PER_COUNT = 0.000061f;
+constexpr float MAG_UT_PER_COUNT = 100.0f / 6842.0f;
 
 VL53L1X lox_left, lox_right;
 
 
 void calibrate_scale(HX711* scale){
   Serial.println("Ensure all load is removed");
-  // delay(3000);
 
   scale->set_scale();   
   scale->tare();       
-
-  // Serial.println("Tare complete.");
-  // Serial.println("Now place the 500 g mass.");
-  // delay(5000);
 
   scale->set_scale(calibration_factor);
   Serial.println("Loaded calibration factor");
@@ -155,12 +154,12 @@ void setup() {
   lox_right.setAddress(TOF2_ADDR);
 
   lox_left.setDistanceMode(VL53L1X::Short);
-  lox_left.setMeasurementTimingBudget(20000);
-  lox_left.startContinuous(33);
+  lox_left.setMeasurementTimingBudget(TOF_TIMING_BUDGET);
+  lox_left.startContinuous(TOF_CONTINUOUS_PERIOD);
 
   lox_right.setDistanceMode(VL53L1X::Short);
-  lox_right.setMeasurementTimingBudget(20000);
-  lox_right.startContinuous(33);
+  lox_right.setMeasurementTimingBudget(TOF_TIMING_BUDGET);
+  lox_right.startContinuous(TOF_CONTINUOUS_PERIOD);
   
   Serial.println("Finished TOF setup");
 
@@ -223,38 +222,38 @@ void loop() {
 
   }
 
-  if (imu6_left.readReg((LSM6::STATUS_REG)) & 0b00000011 == 0b00000011){
+  if ((imu6_left.readReg((LSM6::STATUS_REG)) & 0b00000011) == 0b00000011){
     imu6_left.read();
-    latest_snapshot.left_imu.a.x = imu6_left.a.x;
-    latest_snapshot.left_imu.a.y = imu6_left.a.y;
-    latest_snapshot.left_imu.a.z = imu6_left.a.z;
+    latest_snapshot.left_imu.a.x = imu6_left.a.x * ACC_G_PER_COUNT;
+    latest_snapshot.left_imu.a.y = imu6_left.a.y * ACC_G_PER_COUNT;
+    latest_snapshot.left_imu.a.z = imu6_left.a.z * ACC_G_PER_COUNT;
     latest_snapshot.left_imu.g.x = imu6_left.g.x * imu_sensitivity;
     latest_snapshot.left_imu.g.y = imu6_left.g.y * imu_sensitivity;
     latest_snapshot.left_imu.g.z = imu6_left.g.z * imu_sensitivity;
   }
   
-  if (imu_mag_left.readReg(LIS3MDL::STATUS_REG) & 0b00001000 == 0b00001000){
+  if ((imu_mag_left.readReg(LIS3MDL::STATUS_REG) & 0b00001000) == 0b00001000){
     imu_mag_left.read();
-    latest_snapshot.left_imu.m.x = imu_mag_left.m.x;
-    latest_snapshot.left_imu.m.y = imu_mag_left.m.y;
-    latest_snapshot.left_imu.m.z = imu_mag_left.m.z;
+    latest_snapshot.left_imu.m.x = imu_mag_left.m.x * MAG_UT_PER_COUNT;
+    latest_snapshot.left_imu.m.y = imu_mag_left.m.y * MAG_UT_PER_COUNT;
+    latest_snapshot.left_imu.m.z = imu_mag_left.m.z * MAG_UT_PER_COUNT;
   }
 
-  if (imu6_right.readReg((LSM6::STATUS_REG)) & 0b00000011 == 0b00000011){
+  if ((imu6_right.readReg((LSM6::STATUS_REG)) & 0b00000011) == 0b00000011){
     imu6_right.read();
-    latest_snapshot.right_imu.a.x = imu6_right.a.x;
-    latest_snapshot.right_imu.a.y = imu6_right.a.y;
-    latest_snapshot.right_imu.a.z = imu6_right.a.z;
+    latest_snapshot.right_imu.a.x = imu6_right.a.x * ACC_G_PER_COUNT; 
+    latest_snapshot.right_imu.a.y = imu6_right.a.y * ACC_G_PER_COUNT;
+    latest_snapshot.right_imu.a.z = imu6_right.a.z * ACC_G_PER_COUNT;
     latest_snapshot.right_imu.g.x = imu6_right.g.x * imu_sensitivity;
     latest_snapshot.right_imu.g.y = imu6_right.g.y * imu_sensitivity;
     latest_snapshot.right_imu.g.z = imu6_right.g.z * imu_sensitivity;
   }
   
-  if (imu_mag_right.readReg(LIS3MDL::STATUS_REG) & 0b00001000 == 0b00001000){
+  if ((imu_mag_right.readReg(LIS3MDL::STATUS_REG) & 0b00001000) == 0b00001000){
     imu_mag_right.read();
-    latest_snapshot.right_imu.m.x = imu_mag_right.m.x;
-    latest_snapshot.right_imu.m.y = imu_mag_right.m.y;
-    latest_snapshot.right_imu.m.z = imu_mag_right.m.z;
+    latest_snapshot.right_imu.m.x = imu_mag_right.m.x * MAG_UT_PER_COUNT;
+    latest_snapshot.right_imu.m.y = imu_mag_right.m.y * MAG_UT_PER_COUNT;
+    latest_snapshot.right_imu.m.z = imu_mag_right.m.z * MAG_UT_PER_COUNT;
   }
 
 

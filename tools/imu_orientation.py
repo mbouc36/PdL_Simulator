@@ -13,7 +13,6 @@ import numpy as np
 from ahrs.filters import Madgwick
 from scipy.spatial.transform import Rotation
 
-GAUSS_TO_MILLI_TESLA_CONVERSION = 10
 MILLISECOND_TO_SECOND_CONVERSION = 1000
 CONFIG_FILENAME = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -24,7 +23,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
 from tools.serial_parser import SerialParser
 
-STARTING_GAIN = 0.8
+STARTING_GAIN = 0.9
 SETTLED_GAIN = 0.041
 
 
@@ -116,13 +115,13 @@ class IMUQuaternionTracker:
 
         mxCal = (
             (mx - self.magOffset["x"]) * self.magScale["x"]
-        ) / GAUSS_TO_MILLI_TESLA_CONVERSION
+        ) 
         myCal = (
             (my - self.magOffset["y"]) * self.magScale["y"]
-        ) / GAUSS_TO_MILLI_TESLA_CONVERSION
+        ) 
         mzCal = (
             (mz - self.magOffset["z"]) * self.magScale["z"]
-        ) / GAUSS_TO_MILLI_TESLA_CONVERSION
+        ) 
 
         gyro_data = np.array([gxCal, gyCal, gzCal])
         acc_data = np.array([axCal, ayCal, azCal])
@@ -162,9 +161,9 @@ class IMUQuaternionTracker:
         q = self.update(dt, gyro, accel, mag)
 
         if self.use_offset:
-            return self.apply_heading_offset(q)
-        else:
-            return q
+            q = self.apply_heading_offset(q)
+
+        return [round(float(value), 5) for value in q ]
 
     def set_gain(self, gain=SETTLED_GAIN):
         """
