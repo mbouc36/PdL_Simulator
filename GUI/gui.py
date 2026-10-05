@@ -401,7 +401,7 @@ class GUI(QWidget):
             error_label.setText("")
             name_box.clear()
             self.name = name
-
+            self.key_label.setText(str(self.file_manager.key))
             self.pages.setCurrentWidget(self.task_menu_page)
             return
 
@@ -501,7 +501,7 @@ class GUI(QWidget):
             # Clear any previous error
             error_label.setText("")
             self.key = key
-
+            self.key_label.setText(str(self.file_manager.key))
             self.pages.setCurrentWidget(self.task_menu_page)
             return
 
@@ -527,6 +527,15 @@ class GUI(QWidget):
             margin-bottom: 12px;
         """)
 
+        self.key_label = QLabel("")
+        self.key_label.setAlignment(Qt.AlignCenter)
+        self.key_label.setStyleSheet("""
+            font-size: 24px;
+            color: black;
+            font-family: "Times New Roman", Times, serif;
+            margin-bottom: 12px;
+        """)
+
         warm_up_btn = QPushButton("Warm Up")
         peg_transfer_btn = QPushButton("Peg Transfer")
         precision_cutting_btn = QPushButton("Precision Cutting")
@@ -545,6 +554,7 @@ class GUI(QWidget):
 
         layout.addStretch()
         layout.addWidget(title)
+        layout.addWidget(self.key_label)
 
         for btn in buttons:
             btn.setFixedHeight(50)
@@ -632,8 +642,12 @@ class GUI(QWidget):
             btn.setMaximumWidth(400)
             btn.setStyleSheet(self.btn_style)
 
+        def go_to_task_menu_page():
+            self.key_label.setText(str(self.file_manager.key))
+            self.pages.setCurrentWidget(self.task_menu_page)
+
         new_task_btn.clicked.connect(
-            lambda: self.pages.setCurrentWidget(self.task_menu_page)
+            lambda: go_to_task_menu_page()
         )
 
         def logout_user():
