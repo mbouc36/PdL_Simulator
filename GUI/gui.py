@@ -72,6 +72,7 @@ class GUI(QWidget):
         self.timer_update.setInterval(10)  # refresh display every 10 ms
         self.timer_update.timeout.connect(self.update_task_timer)
         self.task_elapsed_ms = 0
+        self.timer_started = False
 
         # Create User Pages
         self.login_page = self.create_login_page()
@@ -206,7 +207,7 @@ class GUI(QWidget):
                 background-color: #FFFFF0;
                 color: black;
                 border: 1px solid #D8D0C0;
-                border-radius: 5px;
+                border-radius: 25px;
                 padding: 5px 5px;
                 font-size: 100px;
                 font-family: "Times New Roman", Times, serif;
@@ -282,6 +283,9 @@ class GUI(QWidget):
         self.data_thread.start()
 
     def update_video_frame(self, frame):
+        if not self.timer_started:
+            self.start_task_timer()
+
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
         h, w, ch = frame.shape
@@ -558,8 +562,10 @@ class GUI(QWidget):
             self.file_manager.update_destination_folder(task)
             self.reset_video_label()
             self.is_data_valid = False
+
+            self.reset_task_timer()
+
             self.pages.setCurrentWidget(self.video_page)
-            self.start_task_timer()
             self.start_video()
 
         warm_up_btn.clicked.connect(lambda checked=False: set_task(FileManager.WARM_UP))
@@ -680,8 +686,10 @@ class GUI(QWidget):
         event.accept()
 
     def start_task_timer(self):
-        """Reset and start the task stopwatch."""
+        """Start the task stopwatch."""
+
         self.task_elapsed_ms = 0
+        self.timer_started = True
 
         self.task_timer.start()
         self.timer_update.start()
@@ -695,7 +703,7 @@ class GUI(QWidget):
             self.task_elapsed_ms = self.task_timer.elapsed()
 
         self.timer_update.stop()
-
+        self.timer_started = False
         # Make sure the final displayed value is exact
         self.timer_label.setText(
             self.format_elapsed_time(self.task_elapsed_ms)
@@ -728,3 +736,13 @@ class GUI(QWidget):
         hundredths = (elapsed_ms % 1000) // 10
 
         return f"{minutes:02d}.{seconds:02d}.{hundredths:02d}"
+
+    def reset_task_timer(self):
+        """Reset the task timer without starting it."""
+        self.timer_update.stop()
+
+        self.task_elapsed_ms = 0
+        self.timer_started = False
+
+        self.task_timer.invalidate()
+        self.timer_label.setText("00.00.00")
