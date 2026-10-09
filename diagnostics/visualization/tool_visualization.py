@@ -138,11 +138,12 @@ class ToolVisualization(QWidget):
         self.latest_quaternion = [1.0, 0.0, 0.0, 0.0]
         self.latest_distance = 0
         self.data_age = 0
-
+        self.z_arrow = None
         self.update_orientation()
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.TimerType.PreciseTimer)
         self.timer.timeout.connect(self.update_orientation)
+        
         self.timer.start(TIMEOUT_MS)
 
     def set_north_offset(self, north_offset):
@@ -308,5 +309,29 @@ class ToolVisualization(QWidget):
         self.ax.set_ylim(midpoints[1] - half_range, midpoints[1] + half_range)
 
         self.ax.set_zlim(midpoints[2] - half_range, midpoints[2] + half_range)
+
+        # +Z face center
+        face_center = center + half_thickness * z_direction
+        # ---------------------------------
+        # +Z direction arrow
+        # ---------------------------------
+
+        if self.z_arrow is not None:
+            self.z_arrow.remove()
+
+        arrow_length = 1.0 * visual_scale
+
+        self.z_arrow = self.ax.quiver(
+            face_center[0],
+            face_center[1],
+            face_center[2],
+            z_direction[0],
+            z_direction[1],
+            z_direction[2],
+            length=arrow_length,
+            normalize=True,
+            arrow_length_ratio=0.25,
+            linewidth=2,
+        )
 
         self.canvas.draw()

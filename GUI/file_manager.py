@@ -24,7 +24,7 @@ KEY_COLUMN = "Key"
 class FileManager:
     PEG_TRANSFER = "PT"
     PERCISION_CUTTING = "PC"
-    LITIGATION_LOOP = "LL"
+    LIGATING_LOOP = "LL"
     INTRACORPOREAL_SUTURING = "IS"
     EXTRACORPOREAL_SUTURING = "ES"
     WARM_UP = "WU"
@@ -37,7 +37,7 @@ class FileManager:
         self.tasks = [
             self.PEG_TRANSFER,
             self.PERCISION_CUTTING,
-            self.LITIGATION_LOOP,
+            self.LIGATING_LOOP,
             self.INTRACORPOREAL_SUTURING,
             self.EXTRACORPOREAL_SUTURING,
             self.WARM_UP,
@@ -72,7 +72,9 @@ class FileManager:
         else:
             children.sort(key=int)
             current_task_num = int(children[-1]) + 1
-            current_trial = Path(os.path.join(self.current_task, f"{current_task_num:03d}"))
+            current_trial = Path(
+                os.path.join(self.current_task, f"{current_task_num:03d}")
+            )
             current_trial.mkdir(parents=True, exist_ok=True)
 
         self.destination_folder = current_trial
@@ -86,7 +88,7 @@ class FileManager:
 
     def update_name_to_key_file(self, name):
 
-        # update name to key 
+        # update name to key
         if not self.is_name_valid(name):
             print("Name is invalid")
             exit(1)
@@ -130,10 +132,10 @@ class FileManager:
         nums = string.digits
         first_char = "".join(secrets.choice(characters))
 
-        return first_char + "".join(secrets.choice(nums) for _ in range(length -1))
+        return first_char + "".join(secrets.choice(nums) for _ in range(length - 1))
 
     def create_name_to_key_file(self, file_path):
-        
+
         if file_path is None:
             print("name_to_key_file is not a valid path")
             exit(1)
@@ -150,4 +152,3 @@ class FileManager:
 
     def update_destination_folder(self, task):
         self.create_task_folder(task)
-        

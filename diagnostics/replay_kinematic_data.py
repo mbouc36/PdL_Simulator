@@ -23,6 +23,7 @@ from PyQt5.QtWidgets import (
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from diagnostics.visualization.tool_visualization import ToolVisualization
+from tools.get_files_from_folder import get_video_file, get_processed_data_file
 
 NORTH_OFFSET = 180
 
@@ -37,11 +38,20 @@ PLAYBACK_SPEED = 2
 
 
 class ReplayKinematicData(QWidget):
-    def __init__(self, video_path, csv_path):
+    def __init__(self, folder=None, video_path=None, csv_path=None):
         super().__init__()
 
-        self.video_path = video_path
-        self.csv_path = csv_path
+        if folder is None:
+            if video_path is None or csv_path is None:
+                print("No valid in input files or folder")
+                exit(1)
+
+            self.video_path = video_path
+            self.csv_path = csv_path
+        else:
+            self.video_path = get_video_file(folder)
+            self.csv_path = get_processed_data_file(folder)
+
 
         self.current_index = 0
         self.data = []
@@ -298,6 +308,12 @@ if __name__ == "__main__":
         help="Path to kinematic CSV file",
     )
 
+    parser.add_argument(
+        "-f",
+        "--folder",
+        help="Folder which contains csv and video",
+    )
+
     args = parser.parse_args()
 
     app = QApplication(sys.argv)
@@ -305,6 +321,7 @@ if __name__ == "__main__":
     window = ReplayKinematicData(
         video_path=args.video,
         csv_path=args.csv,
+        folder=args.folder
     )
 
     window.resize(1200, 700)
