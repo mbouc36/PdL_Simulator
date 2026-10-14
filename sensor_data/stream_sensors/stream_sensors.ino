@@ -45,8 +45,8 @@ HX711 scale_front, scale_back;
 float calibration_factor = -2150.0; 
 
 // IMU 
-#define GYRO_CTRL_REGISTER 0b01000100 // Set gyro to 104 Hz sampling and 500 dps
-#define ACC_CTRL_REGISTER 0b01000000 // Set accelerometer to 104Hz sampling
+#define GYRO_CTRL_REGISTER 0b01100100 // Set gyro to 52 Hz sampling and 500 dps
+#define ACC_CTRL_REGISTER 0b00110000 // Set accelerometer to 52Hz sampling
 #define MAG_CTRL_REGISTER 0b01111100 // Set sampling to 80Hz
 
 LSM6 imu6_left, imu6_right;
