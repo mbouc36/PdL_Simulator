@@ -52,7 +52,6 @@ float calibration_factor = -2150.0;
 LSM6 imu6_left, imu6_right;
 LIS3MDL imu_mag_left, imu_mag_right;
 
-float imu_sensitivity = 4.375/ 1000; // This is proportional to dps see data sheet
 
 // TOF
 #define XSHUT_1 6
@@ -66,6 +65,7 @@ float imu_sensitivity = 4.375/ 1000; // This is proportional to dps see data she
 
 constexpr float ACC_G_PER_COUNT = 0.000061f;
 constexpr float MAG_UT_PER_COUNT = 100.0f / 6842.0f;
+float GYRO_SENSITIVITY = 17.50/ 1000; // This is proportional to dps see data sheet
 
 VL53L1X lox_left, lox_right;
 
@@ -227,9 +227,9 @@ void loop() {
     latest_snapshot.left_imu.a.x = imu6_left.a.x * ACC_G_PER_COUNT;
     latest_snapshot.left_imu.a.y = imu6_left.a.y * ACC_G_PER_COUNT;
     latest_snapshot.left_imu.a.z = imu6_left.a.z * ACC_G_PER_COUNT;
-    latest_snapshot.left_imu.g.x = imu6_left.g.x * imu_sensitivity;
-    latest_snapshot.left_imu.g.y = imu6_left.g.y * imu_sensitivity;
-    latest_snapshot.left_imu.g.z = imu6_left.g.z * imu_sensitivity;
+    latest_snapshot.left_imu.g.x = imu6_left.g.x * GYRO_SENSITIVITY;
+    latest_snapshot.left_imu.g.y = imu6_left.g.y * GYRO_SENSITIVITY;
+    latest_snapshot.left_imu.g.z = imu6_left.g.z * GYRO_SENSITIVITY;
   }
   
   if ((imu_mag_left.readReg(LIS3MDL::STATUS_REG) & 0b00001000) == 0b00001000){
@@ -244,9 +244,9 @@ void loop() {
     latest_snapshot.right_imu.a.x = imu6_right.a.x * ACC_G_PER_COUNT; 
     latest_snapshot.right_imu.a.y = imu6_right.a.y * ACC_G_PER_COUNT;
     latest_snapshot.right_imu.a.z = imu6_right.a.z * ACC_G_PER_COUNT;
-    latest_snapshot.right_imu.g.x = imu6_right.g.x * imu_sensitivity;
-    latest_snapshot.right_imu.g.y = imu6_right.g.y * imu_sensitivity;
-    latest_snapshot.right_imu.g.z = imu6_right.g.z * imu_sensitivity;
+    latest_snapshot.right_imu.g.x = imu6_right.g.x * GYRO_SENSITIVITY;
+    latest_snapshot.right_imu.g.y = imu6_right.g.y * GYRO_SENSITIVITY;
+    latest_snapshot.right_imu.g.z = imu6_right.g.z * GYRO_SENSITIVITY;
   }
   
   if ((imu_mag_right.readReg(LIS3MDL::STATUS_REG) & 0b00001000) == 0b00001000){
