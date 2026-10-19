@@ -24,7 +24,7 @@ from update_config import load_config
 from tools.serial_parser import SerialParser
 
 STARTING_GAIN = 0.9
-SETTLED_GAIN = 0.041
+SETTLED_GAIN = 0.1
 
 
 class IMUQuaternionTracker:
