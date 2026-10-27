@@ -287,7 +287,7 @@ class ToolVisualization(QWidget):
         # Dynamically scale background
         # ---------------------------------
 
-        points = np.vstack([translated, np.array([[0.0, 0.0, 0.0]])])
+        points = np.vstack([translated, np.array([[0.0, 0.0, 0.0]]), line_end.reshape(1, 3),])
 
         min_vals = points.min(axis=0)
         max_vals = points.max(axis=0)
@@ -319,7 +319,12 @@ class ToolVisualization(QWidget):
         if self.z_arrow is not None:
             self.z_arrow.remove()
 
+
         arrow_length = 1.0 * visual_scale
+
+        line_start = face_center
+
+        line_end = face_center + self.latest_distance * z_direction
 
         self.z_arrow = self.ax.quiver(
             face_center[0],

@@ -23,16 +23,15 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from update_config import load_config
 from tools.serial_parser import SerialParser
 
-STARTING_GAIN = 0.9
-SETTLED_GAIN = 0.1
+
 
 
 class IMUQuaternionTracker:
     STARTING_GAIN = 0.8
-    SETTLED_GAIN = 0.041
+    SETTLED_GAIN = 0.2
 
     def __init__(self, name="left", config_file=CONFIG_FILENAME, use_offset=True):
-        self.filter = Madgwick(gain=STARTING_GAIN)
+        self.filter = Madgwick(gain=self.STARTING_GAIN)
         self.q = np.array([1.0, 0.0, 0.0, 0.0])
 
         self.accOffset = None
