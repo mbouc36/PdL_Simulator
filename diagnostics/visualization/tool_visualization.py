@@ -220,7 +220,7 @@ class ToolVisualization(QWidget):
         # Position the tool
         # ---------------------------------
 
-        center = (self.latest_distance - half_thickness) * z_direction
+        center = -(self.latest_distance + half_thickness) * z_direction
 
         # ---------------------------------
         # Rotate + translate vertices
@@ -260,7 +260,7 @@ class ToolVisualization(QWidget):
         # ---------------------------------
         # Center of the +Z face (same position as arrow)
 
-        face_center = center + half_thickness * z_direction
+        face_center = -self.latest_distance * z_direction
 
         # Line extends from origin to the +Z face
 
