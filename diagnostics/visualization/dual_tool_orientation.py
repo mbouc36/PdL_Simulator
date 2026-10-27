@@ -105,7 +105,7 @@ class DualIMUData(QThread):
 
                 distances = list(tof_manager.get_distances(tof_values))
 
-                data = [left_q, distances[0], right_q,distances[1]]
+                data = [left_q, distances[0], right_q, distances[1]]
                 self.quaternion_data.emit(data)
 
         except KeyboardInterrupt:
