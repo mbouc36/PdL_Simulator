@@ -258,33 +258,38 @@ class ToolVisualization(QWidget):
         # ---------------------------------
         # +Z face center
         # ---------------------------------
+        # Center of the +Z face (same position as arrow)
 
         face_center = center + half_thickness * z_direction
 
-        # ---------------------------------
-        # Distance line
-        # ---------------------------------
+        # Line extends from origin to the +Z face
 
-        # Start at the same face as the +Z arrow
-        line_start = face_center
+        line_start = np.array([0.0, 0.0, 0.0])
 
-        # Extend outward along the +Z direction
-        line_end = face_center + self.latest_distance * z_direction
+        line_end = face_center
 
         self.distance_line.set_data(
+
             [line_start[0], line_end[0]],
+
             [line_start[1], line_end[1]],
+
         )
 
         self.distance_line.set_3d_properties(
+
             [line_start[2], line_end[2]]
+
         )
 
         # Distance label at midpoint
+
         midpoint = (line_start + line_end) / 2
 
         self.distance_text.set_position(
+
             (midpoint[0], midpoint[1])
+
         )
 
         self.distance_text.set_3d_properties(midpoint[2])
