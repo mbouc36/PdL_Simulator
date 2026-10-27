@@ -10,7 +10,6 @@ import sys
 import json
 import numpy as np
 from time import sleep
-from scipy.stats import circmean
 from scipy.spatial.transform import Rotation
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -25,7 +24,7 @@ CONIFG_ELEMENT_NAME = "heading_offset"
 
 
 def get_sample_quaternions(
-    first_imu_name, right_imu_name, num_samples=2000, num_init_samples=400
+    first_imu_name, right_imu_name, num_samples=800, num_init_samples=400
 ):
     """
     Get x samples of quaternions from both left and right IMUs, calculate the average
@@ -35,7 +34,7 @@ def get_sample_quaternions(
     serial_parser = SerialParser()
     left_imu = IMUQuaternionTracker(name=first_imu_name, use_offset=False)
     right_imu = IMUQuaternionTracker(name=right_imu_name, use_offset=False)
-    input("Press ENTER when the sensor is positioned in the grooves")
+    input("Press ENTER when the sensors are in position")
     serial_parser.reset_input_buffer()
     left_samples = []
     right_samples = []

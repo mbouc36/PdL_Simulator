@@ -14,6 +14,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from update_config import load_config
 from tools.imu_orientation import IMUQuaternionTracker
+from tools.tof_manager import TOFManager
 from diagnostics.visualization.tool_visualization import ToolVisualization
 
 config = load_config()
@@ -61,10 +62,12 @@ class DualIMUData(QThread):
             print(f"Failed to connect to port: {SERIAL_PORT}")
             exit(1)
 
-        # Initialize the left_tracker
+        # Initialize the trackers
         left_tracker = IMUQuaternionTracker("left")
         right_tracker = IMUQuaternionTracker("right")
+        tof_manager = TOFManager()
         iter_counter = 0
+
 
         try:
             while True:
@@ -82,12 +85,13 @@ class DualIMUData(QThread):
                 iter_counter += 1
                 if iter_counter == COUNT_TILL_SETTLED:
                     print("Gain updated")
-                    left_tracker.set_gain()
-                    right_tracker.set_gain()
+                    left_tracker.set_gain(0.2)
+                    right_tracker.set_gain(0.2)
 
                 arduino_time = line[0]
                 left_imu_values = [arduino_time] + line[5:14]
                 right_imu_values = [arduino_time] + line[14:]
+                tof_values = line[3:5]
 
                 left_q = left_tracker.get_quaternion(left_imu_values)
                 if left_q is None:
@@ -99,7 +103,9 @@ class DualIMUData(QThread):
                     print("Failed to retrived right quaternion")
                     continue
 
-                data = [left_q, 0, right_q, 0]
+                distances = list(tof_manager.get_distances(tof_values))
+
+                data = [left_q, distances[0], right_q,distances[1]]
                 self.quaternion_data.emit(data)
 
         except KeyboardInterrupt:
