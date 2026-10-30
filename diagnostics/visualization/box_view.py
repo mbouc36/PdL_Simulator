@@ -33,7 +33,7 @@ class VisualizeBox(QWidget):
 
     def load_data(self, data):
         print(data)
-        self.viz.update_imu_data(data[0], data[2], data[1], data[3])
+        self.viz.load_latest_data(data[0], data[2], data[1], data[3])
 
 
 class DualIMUData(QThread):
