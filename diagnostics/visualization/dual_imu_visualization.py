@@ -25,6 +25,8 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
+TIMEOUT_MS = 200   # render interval in milliseconds (5 Hz)
+
 # ---------------------------------------------------------------------------
 # Box geometry (cm)
 # ---------------------------------------------------------------------------
@@ -111,9 +113,20 @@ class DualIMUVisualization(QWidget):
         # ---- Internal state ----
         self._imu_arrows = {"A": None, "B": None}
 
-        # ---- Initial draw with identity quaternions ----
-        q0 = [1.0, 0.0, 0.0, 0.0]
-        self.update_imu_data(q0, q0, 0.0, 0.0)
+        # Latest sensor data — written by load_latest_data(), read by _redraw()
+        self._q1          = [1.0, 0.0, 0.0, 0.0]
+        self._q2          = [1.0, 0.0, 0.0, 0.0]
+        self._dist1_mm    = 0.0
+        self._dist2_mm    = 0.0
+
+        # ---- Initial draw ----
+        self._redraw()
+
+        # ---- Timer-driven rendering (mirrors ToolVisualization pattern) ----
+        self._timer = QTimer(self)
+        self._timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._timer.timeout.connect(self._redraw)
+        self._timer.start(TIMEOUT_MS)
 
     # ------------------------------------------------------------------
     # Camera
@@ -123,6 +136,23 @@ class DualIMUVisualization(QWidget):
         """Rotate the camera azimuth without redrawing the data."""
         self.ax.view_init(elev=25, azim=north_offset % 360)
         self.canvas.draw_idle()
+
+    def load_latest_data(self, q1, q2, dist1_mm, dist2_mm):
+        """
+        Store the latest sensor readings.  Safe to call from any thread or
+        callback — does not touch the plot directly.  The timer will pick up
+        the values on its next tick.
+
+        Parameters
+        ----------
+        q1, q2       : array-like [w, x, y, z]
+        dist1_mm     : float  distance for IMU A (mm)
+        dist2_mm     : float  distance for IMU B (mm)
+        """
+        self._q1       = q1
+        self._q2       = q2
+        self._dist1_mm = dist1_mm
+        self._dist2_mm = dist2_mm
 
     # ------------------------------------------------------------------
     # Static reference box
@@ -190,21 +220,26 @@ class DualIMUVisualization(QWidget):
         ], loc="upper left", fontsize=8)
 
     # ------------------------------------------------------------------
-    # Public update — call this with new sensor data
+    # Convenience wrapper — store + redraw immediately (optional)
     # ------------------------------------------------------------------
 
     def update_imu_data(self, q1, q2, dist1_mm, dist2_mm):
         """
-        Parameters
-        ----------
-        q1, q2       : array-like [w, x, y, z]
-        dist1_mm     : float  distance for IMU A (mm)
-        dist2_mm     : float  distance for IMU B (mm)
+        Convenience: store data and force an immediate redraw.
+        For timer-driven use, prefer load_latest_data() instead.
         """
+        self.load_latest_data(q1, q2, dist1_mm, dist2_mm)
+        self._redraw()
+
+    # ------------------------------------------------------------------
+    # Timer callback — reads stored state and repaints
+    # ------------------------------------------------------------------
+
+    def _redraw(self):
         beam_ends = [VERTEX_A, VERTEX_B]
         for label, q, dist_mm, vertex in [
-            ("A", q1, dist1_mm, VERTEX_A),
-            ("B", q2, dist2_mm, VERTEX_B),
+            ("A", self._q1, self._dist1_mm, VERTEX_A),
+            ("B", self._q2, self._dist2_mm, VERTEX_B),
         ]:
             beam_end = self._update_single_imu(label, q, dist_mm, vertex)
             beam_ends.append(beam_end)
@@ -301,9 +336,12 @@ if __name__ == "__main__":
     window.setCentralWidget(imu_widget)
     window.show()
 
+    # Simulate a fast data-producer (e.g. serial read) running independently
+    # of the widget's own render timer.  load_latest_data() just stores values;
+    # the widget redraws at TIMEOUT_MS regardless of how often data arrives.
     t = 0.0
 
-    def _tick():
+    def _produce_data():
         global t
         angle_a = np.deg2rad(30 * np.sin(t * 0.5))
         q1 = [np.cos(angle_a/2), np.sin(angle_a/2), 0.0, 0.0]
@@ -311,15 +349,15 @@ if __name__ == "__main__":
         angle_b = np.deg2rad(20 * np.sin(t * 0.4 + 1.0))
         q2 = [np.cos(angle_b/2), 0.0, np.sin(angle_b/2), 0.0]
 
-        imu_widget.update_imu_data(
+        imu_widget.load_latest_data(
             q1, q2,
             80 + 40 * np.sin(t * 0.3),
             60 + 30 * np.cos(t * 0.35),
         )
         t += 0.05
 
-    timer = QTimer()
-    timer.timeout.connect(_tick)
-    timer.start(50)   # 20 Hz
+    data_timer = QTimer()
+    data_timer.timeout.connect(_produce_data)
+    data_timer.start(50)   # 20 Hz data feed; widget renders at TIMEOUT_MS
 
     sys.exit(app.exec_())
