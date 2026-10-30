@@ -32,7 +32,6 @@ class VisualizeBox(QWidget):
         self.data_thread.start()
 
     def load_data(self, data):
-        print(data)
         self.viz.load_latest_data(data[0], data[2], data[1], data[3])
 
 
