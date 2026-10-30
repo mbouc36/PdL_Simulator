@@ -1,0 +1,110 @@
+
+import os
+import sys
+import serial
+from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout
+from PyQt5.QtCore import QThread, pyqtSignal
+
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
+from update_config import load_config
+from tools.imu_orientation import IMUQuaternionTracker
+from tools.tof_manager import TOFManager
+from diagnostics.visualization.dual_imu_visualization import DualIMUVisualization
+
+config = load_config()
+
+SERIAL_PORT = config["serial_port"]
+BAUD_RATE = config["baud_rate"]
+
+NORTH_OFFSET = 180
+COUNT_TILL_SETTLED = 400
+
+
+class VisualizeBox(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QHBoxLayout(self)
+
+        self.viz = DualIMUVisualization()
+
+        layout.addWidget(self.viz)
+        self.data_thread = DualIMUData()
+        self.data_thread.quaternion_data.connect(self.load_data)
+        self.data_thread.start()
+
+    def load_data(self, data):
+        self.viz.update_imu_data(data[0], data[2], data[1], data[3])
+
+class DualIMUData(QThread):
+    quaternion_data = pyqtSignal(list)
+
+    def __init__(self):
+        super().__init__()
+        # self.visualize_from_serial()
+
+    def run(self):
+        """
+        Visualize the data from the serial port
+        """
+        try:
+            ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+        except Exception:
+            print(f"Failed to connect to port: {SERIAL_PORT}")
+            exit(1)
+
+        # Initialize the trackers
+        left_tracker = IMUQuaternionTracker("left")
+        right_tracker = IMUQuaternionTracker("right")
+        tof_manager = TOFManager()
+        iter_counter = 0
+
+
+        try:
+            while True:
+
+                try:
+                    line = ser.readline().decode("utf-8").strip()
+                    line = line.split(",")
+                except Exception as e:
+                    print(f"Failed to read line: {e}")
+                    continue
+
+                if not line:
+                    continue
+
+                iter_counter += 1
+                if iter_counter == COUNT_TILL_SETTLED:
+                    print("Gain updated")
+                    left_tracker.set_gain(0.2)
+                    right_tracker.set_gain(0.2)
+
+                arduino_time = line[0]
+                left_imu_values = [arduino_time] + line[5:14]
+                right_imu_values = [arduino_time] + line[14:]
+                tof_values = line[3:5]
+
+                left_q = left_tracker.get_quaternion(left_imu_values)
+                if left_q is None:
+                    print("Failed to retrived left quaternion")
+                    continue
+
+                right_q = right_tracker.get_quaternion(right_imu_values)
+                if right_q is None:
+                    print("Failed to retrived right quaternion")
+                    continue
+
+                distances = list(tof_manager.get_distances(tof_values))
+
+                data = [left_q, distances[0], right_q, distances[1]]
+                self.quaternion_data.emit(data)
+
+        except KeyboardInterrupt:
+            print("\nTracking stopped.")
+
+
+if __name__ == "__main__":
+
+    app = QApplication(sys.argv)
+    window = VisualizeBox()
+    window.show()
+    sys.exit(app.exec())
