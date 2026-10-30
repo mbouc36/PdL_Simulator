@@ -307,8 +307,31 @@ class DualIMUVisualization(QWidget):
     # Per-IMU update
     # ------------------------------------------------------------------
 
-    # 180° rotation around Z: flips local X and Y so the large face and
-    # marker corner rotate to the correct side without moving the beam/arrow.
+    # ------------------------------------------------------------------
+    # Sensor-frame correction
+    #
+    # The Madwick ENU quaternion rotates sensor-local → world (X=East,
+    # Y=North, Z=Up).  If the visualization shows wrong motion, adjust
+    # SENSOR_FRAME below.  It is a post-multiply: R_corr = R @ SENSOR_FRAME.
+    #
+    # Each ROW of SENSOR_FRAME defines where one sensor axis goes in the
+    # visualization local frame.  The identity matrix means "sensor axes
+    # already match the visualization".
+    #
+    # Common single-axis fixes (change one row at a time and retest):
+    #   Up/down inverted        → negate row 2  (the Z / beam row)
+    #   Roll direction inverted → negate row 0  (the X row)
+    #   Pitch direction inverted→ negate row 1  (the Y row)
+    #   Pitch and roll swapped  → swap rows 0 and 1
+    #
+    # Example: pitch↔roll swapped AND roll direction inverted:
+    #   SENSOR_FRAME = np.array([[ 0., 1., 0.],   # viz-X ← sensor-Y
+    #                             [-1., 0., 0.],   # viz-Y ← -sensor-X
+    #                             [ 0., 0., 1.]])  # viz-Z ← sensor-Z (beam)
+    _SENSOR_FRAME = np.eye(3)  # ← adjust here to fix axis mapping
+
+    # 180° around the beam (Z) axis so the large face of the IMU rectangle
+    # faces the vertex and the marker corner sits top-right.
     _ROT180Z = np.array(
         [
             [-1.0, 0.0, 0.0],
@@ -321,12 +344,15 @@ class DualIMUVisualization(QWidget):
         R = quaternion_to_matrix(q)
         dist_cm = dist_mm / 10.0
         color = COLORS[label]
-        z_dir = R @ np.array([0.0, 0.0, 1.0])
 
-        # R_box rotates the physical box 180° around its local Z so the large
-        # face (along X) and the marker corner face the vertex.
-        # z_dir is derived from R, not R_box, so the beam/arrow are unaffected.
-        R_box = R  # @ self._ROT180Z
+        # Apply sensor-frame correction (identity by default — tune as needed).
+        R_corr = R @ self._SENSOR_FRAME
+
+        # z_dir: beam/measurement direction in world space.
+        z_dir = R_corr @ np.array([0.0, 0.0, 1.0])
+
+        # R_box: additionally spin rectangle 180° so the large face faces vertex.
+        R_box = R_corr @ self._ROT180Z
 
         # Beam end: point along +z_dir from vertex by dist_cm.
         # The IMU's local +Z face is its "front" and must point toward the
