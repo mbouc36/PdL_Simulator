@@ -1,4 +1,3 @@
-
 import os
 import sys
 import serial
@@ -36,6 +35,7 @@ class VisualizeBox(QWidget):
         print(data)
         self.viz.update_imu_data(data[0], data[2], data[1], data[3])
 
+
 class DualIMUData(QThread):
     quaternion_data = pyqtSignal(list)
 
@@ -59,7 +59,6 @@ class DualIMUData(QThread):
         tof_manager = TOFManager()
         iter_counter = 0
 
-
         try:
             while True:
 
@@ -71,6 +70,9 @@ class DualIMUData(QThread):
                     continue
 
                 if not line:
+                    continue
+
+                if len(line) != 23:
                     continue
 
                 iter_counter += 1
@@ -98,7 +100,6 @@ class DualIMUData(QThread):
 
                 data = [left_q, distances[0], right_q, distances[1]]
                 self.quaternion_data.emit(data)
-
 
         except KeyboardInterrupt:
             print("\nTracking stopped.")
