@@ -268,7 +268,7 @@ class DualIMUVisualization(QWidget):
         # R_box rotates the physical box 180° around its local Z so the large
         # face (along X) and the marker corner face the vertex.
         # z_dir is derived from R, not R_box, so the beam/arrow are unaffected.
-        R_box = R @ self._ROT180Z
+        #R_box = R @ self._ROT180Z
 
         # Beam end: point along +z_dir from vertex by dist_cm.
         # The IMU's local +Z face is its "front" and must point toward the
