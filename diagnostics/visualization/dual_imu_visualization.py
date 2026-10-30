@@ -34,8 +34,8 @@ BOX_L = 18.0
 BOX_W = 10.0
 BOX_H = 9.0
 
-VERTEX_A = np.array([-BOX_L / 2, -BOX_W / 2, BOX_H / 2])
-VERTEX_B = np.array([-BOX_L / 2, BOX_W / 2, BOX_H / 2])
+VERTEX_B = np.array([-BOX_L / 2, -BOX_W / 2, BOX_H / 2])
+VERTEX_A = np.array([-BOX_L / 2, BOX_W / 2, BOX_H / 2])
 
 IMU_HALF = np.array([1.5, 0.8, 0.2])  # half-extents of the IMU box visual (cm)
 
