@@ -33,6 +33,7 @@ class VisualizeBox(QWidget):
         self.data_thread.start()
 
     def load_data(self, data):
+        print(data)
         self.viz.update_imu_data(data[0], data[2], data[1], data[3])
 
 class DualIMUData(QThread):
@@ -97,6 +98,7 @@ class DualIMUData(QThread):
 
                 data = [left_q, distances[0], right_q, distances[1]]
                 self.quaternion_data.emit(data)
+
 
         except KeyboardInterrupt:
             print("\nTracking stopped.")

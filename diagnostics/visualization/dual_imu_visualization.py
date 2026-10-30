@@ -222,22 +222,28 @@ class DualIMUVisualization(QWidget):
         color    = COLORS[label]
         z_dir    = R @ np.array([0.0, 0.0, 1.0])
 
-        # Beam tip = IMU box centre
-        beam_end = vertex + dist_cm * z_dir
+        # Beam end: point along +z_dir from vertex by dist_cm.
+        # The IMU's local +Z face is its "front" and must point toward the
+        # vertex, so the IMU sits beyond beam_end with its -Z face flush there.
+        # Box centre is therefore one half-thickness further out.
+        beam_end   = vertex + dist_cm * z_dir
+        box_centre = beam_end + IMU_HALF[2] * z_dir   # push box past beam tip
 
-        # ---- IMU box centred at beam tip ----
-        translated_v = _imu_box_vertices(IMU_HALF) @ R.T + beam_end
+        # ---- IMU box centred at box_centre ----
+        translated_v = _imu_box_vertices(IMU_HALF) @ R.T + box_centre
         for line, (i, j) in zip(self.imu_lines[label], BOX_EDGES):
             p1, p2 = translated_v[i], translated_v[j]
             line.set_data([p1[0], p2[0]], [p1[1], p2[1]])
             line.set_3d_properties([p1[2], p2[2]])
 
-        # ---- Front-face marker ----
-        mk_world = R @ np.array([IMU_HALF[0]*0.6, IMU_HALF[1]*0.6, IMU_HALF[2]]) + beam_end
+        # ---- Front-face marker: local +Z face corner, facing vertex ----
+        # Local +Z face is at -hz in our convention (flipped to face vertex),
+        # so the marker sits on the -Z face of the box (toward the vertex).
+        mk_world = R @ np.array([IMU_HALF[0]*0.6, IMU_HALF[1]*0.6, -IMU_HALF[2]]) + box_centre
         self.imu_markers[label].set_data([mk_world[0]], [mk_world[1]])
         self.imu_markers[label].set_3d_properties([mk_world[2]])
 
-        # ---- Dashed beam vertex → box centre ----
+        # ---- Dashed beam: vertex → beam_end (face of IMU toward vertex) ----
         self.imu_beams[label].set_data([vertex[0], beam_end[0]],
                                         [vertex[1], beam_end[1]])
         self.imu_beams[label].set_3d_properties([vertex[2], beam_end[2]])
@@ -248,19 +254,19 @@ class DualIMUVisualization(QWidget):
         self.imu_beam_texts[label].set_3d_properties(mid[2])
         self.imu_beam_texts[label].set_text(f"{dist_mm:.1f} mm")
 
-        # ---- +Z direction arrow at beam tip ----
+        # ---- Arrow points from box back toward vertex (along -z_dir) ----
         if self._imu_arrows[label] is not None:
             self._imu_arrows[label].remove()
         arrow_len = max(1.5, abs(dist_cm) * 0.15 + 1.5)
         self._imu_arrows[label] = self.ax.quiver(
-            beam_end[0], beam_end[1], beam_end[2],
-            z_dir[0], z_dir[1], z_dir[2],
+            box_centre[0], box_centre[1], box_centre[2],
+            -z_dir[0], -z_dir[1], -z_dir[2],
             length=arrow_len, normalize=True,
             arrow_length_ratio=0.25, linewidth=2,
             color=color,
         )
 
-        return beam_end
+        return box_centre
 
     # ------------------------------------------------------------------
     # Auto-scale axes
