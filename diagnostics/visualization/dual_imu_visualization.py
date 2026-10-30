@@ -352,14 +352,14 @@ class DualIMUVisualization(QWidget):
         z_dir = R_corr @ np.array([0.0, 0.0, 1.0])
 
         # R_box: additionally spin rectangle 180° so the large face faces vertex.
-        R_box = R_corr @ self._ROT180Z
+        R_box = R_corr  # @ self._ROT180Z
 
         # Beam end: point along +z_dir from vertex by dist_cm.
         # The IMU's local +Z face is its "front" and must point toward the
         # vertex, so the IMU sits beyond beam_end with its -Z face flush there.
         # Box centre is therefore one half-thickness further out.
-        beam_end = vertex + dist_cm * z_dir
-        box_centre = beam_end + IMU_HALF[2] * z_dir  # push box past beam tip
+        beam_end = vertex - dist_cm * z_dir
+        box_centre = beam_end - IMU_HALF[2] * z_dir  # push box past beam tip
 
         # ---- IMU box centred at box_centre, rotated by R_box ----
         translated_v = _imu_box_vertices(IMU_HALF) @ R_box.T + box_centre
@@ -373,7 +373,7 @@ class DualIMUVisualization(QWidget):
         # so to land in the top-right corner (positive screen-X, positive screen-Y)
         # we use -X, +Y in the rotated frame, which is +X, -Y in R_box local space.
         mk_world = (
-            R_box @ np.array([-IMU_HALF[0] * 0.6, IMU_HALF[1] * 0.6, -IMU_HALF[2]])
+            R_box @ np.array([IMU_HALF[0] * 0.8, IMU_HALF[1] * 0.75, IMU_HALF[2]])
             + box_centre
         )
         self.imu_markers[label].set_data([mk_world[0]], [mk_world[1]])
@@ -399,9 +399,9 @@ class DualIMUVisualization(QWidget):
             box_centre[0],
             box_centre[1],
             box_centre[2],
-            -z_dir[0],
-            -z_dir[1],
-            -z_dir[2],
+            z_dir[0],
+            z_dir[1],
+            z_dir[2],
             length=arrow_len,
             normalize=True,
             arrow_length_ratio=0.25,
