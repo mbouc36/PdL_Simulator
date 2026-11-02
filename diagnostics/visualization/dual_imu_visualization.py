@@ -25,7 +25,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
-TIMEOUT_MS = 200   # render interval in milliseconds (5 Hz)
+TIMEOUT_MS = 200  # render interval in milliseconds (5 Hz)
 
 # ---------------------------------------------------------------------------
 # Box geometry (cm)
@@ -34,49 +34,72 @@ BOX_L = 18.0
 BOX_W = 10.0
 BOX_H = 9.0
 
-VERTEX_A = np.array([-BOX_L / 2, BOX_W / 2, BOX_H / 2])
 VERTEX_B = np.array([-BOX_L / 2, -BOX_W / 2, BOX_H / 2])
+VERTEX_A = np.array([-BOX_L / 2, BOX_W / 2, BOX_H / 2])
 
-IMU_HALF = np.array([1.5, 0.8, 0.2])   # half-extents of the IMU box visual (cm)
+IMU_HALF = np.array([1.5, 0.8, 0.2])  # half-extents of the IMU box visual (cm)
 
 COLORS = {
-    "A":    "#E04040",
-    "B":    "#2060CC",
-    "box":  "#888888",
+    "A": "#E04040",
+    "B": "#2060CC",
+    "box": "#888888",
     "beam": {"A": "#FF8888", "B": "#88AAFF"},
 }
 
 BOX_EDGES = [
-    (0,1),(1,2),(2,3),(3,0),
-    (4,5),(5,6),(6,7),(7,4),
-    (0,4),(1,5),(2,6),(3,7),
+    (0, 1),
+    (1, 2),
+    (2, 3),
+    (3, 0),
+    (4, 5),
+    (5, 6),
+    (6, 7),
+    (7, 4),
+    (0, 4),
+    (1, 5),
+    (2, 6),
+    (3, 7),
 ]
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _imu_box_vertices(half):
     hx, hy, hz = half
-    return np.array([
-        [-hx,-hy,-hz],[ hx,-hy,-hz],[ hx, hy,-hz],[-hx, hy,-hz],
-        [-hx,-hy, hz],[ hx,-hy, hz],[ hx, hy, hz],[-hx, hy, hz],
-    ])
+    return np.array(
+        [
+            [-hx, -hy, -hz],
+            [hx, -hy, -hz],
+            [hx, hy, -hz],
+            [-hx, hy, -hz],
+            [-hx, -hy, hz],
+            [hx, -hy, hz],
+            [hx, hy, hz],
+            [-hx, hy, hz],
+        ]
+    )
+
 
 def quaternion_to_matrix(q):
     """[w, x, y, z] → 3×3 rotation matrix."""
     q = np.asarray(q, dtype=float)
     q = q / np.linalg.norm(q)
     w, x, y, z = q
-    return np.array([
-        [1-2*(y*y+z*z),  2*(x*y-z*w),   2*(x*z+y*w)  ],
-        [2*(x*y+z*w),    1-2*(x*x+z*z), 2*(y*z-x*w)  ],
-        [2*(x*z-y*w),    2*(y*z+x*w),   1-2*(x*x+y*y)],
-    ])
+    return np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+        ]
+    )
+
 
 # ---------------------------------------------------------------------------
 # Main widget
 # ---------------------------------------------------------------------------
+
 
 class DualIMUVisualization(QWidget):
     """
@@ -90,7 +113,7 @@ class DualIMUVisualization(QWidget):
         Initial azimuth of the 3-D camera in degrees.
     """
 
-    def __init__(self, parent=None, north_offset=0):
+    def __init__(self, parent=None, north_offset=180):
         super().__init__(parent)
 
         # ---- Matplotlib figure embedded in Qt ----
@@ -114,10 +137,10 @@ class DualIMUVisualization(QWidget):
         self._imu_arrows = {"A": None, "B": None}
 
         # Latest sensor data — written by load_latest_data(), read by _redraw()
-        self._q1          = [1.0, 0.0, 0.0, 0.0]
-        self._q2          = [1.0, 0.0, 0.0, 0.0]
-        self._dist1_mm    = 0.0
-        self._dist2_mm    = 0.0
+        self._q1 = [1.0, 0.0, 0.0, 0.0]
+        self._q2 = [1.0, 0.0, 0.0, 0.0]
+        self._dist1_mm = 0.0
+        self._dist2_mm = 0.0
 
         # ---- Initial draw ----
         self._redraw()
@@ -149,8 +172,8 @@ class DualIMUVisualization(QWidget):
         dist1_mm     : float  distance for IMU A (mm)
         dist2_mm     : float  distance for IMU B (mm)
         """
-        self._q1       = q1
-        self._q2       = q2
+        self._q1 = q1
+        self._q2 = q2
         self._dist1_mm = dist1_mm
         self._dist2_mm = dist2_mm
 
@@ -159,32 +182,52 @@ class DualIMUVisualization(QWidget):
     # ------------------------------------------------------------------
 
     def _init_static_box(self):
-        hx, hy, hz = BOX_L/2, BOX_W/2, BOX_H/2
-        v = np.array([
-            [-hx,-hy,-hz],[ hx,-hy,-hz],[ hx, hy,-hz],[-hx, hy,-hz],
-            [-hx,-hy, hz],[ hx,-hy, hz],[ hx, hy, hz],[-hx, hy, hz],
-        ])
+        hx, hy, hz = BOX_L / 2, BOX_W / 2, BOX_H / 2
+        v = np.array(
+            [
+                [-hx, -hy, -hz],
+                [hx, -hy, -hz],
+                [hx, hy, -hz],
+                [-hx, hy, -hz],
+                [-hx, -hy, hz],
+                [hx, -hy, hz],
+                [hx, hy, hz],
+                [-hx, hy, hz],
+            ]
+        )
         for i, j in BOX_EDGES:
             self.ax.plot(
-                [v[i,0],v[j,0]], [v[i,1],v[j,1]], [v[i,2],v[j,2]],
-                color=COLORS["box"], linewidth=1.2, alpha=0.5,
+                [v[i, 0], v[j, 0]],
+                [v[i, 1], v[j, 1]],
+                [v[i, 2], v[j, 2]],
+                color=COLORS["box"],
+                linewidth=1.2,
+                alpha=0.5,
             )
-        for label, vertex, color in [("A", VERTEX_A, COLORS["A"]),
-                                      ("B", VERTEX_B, COLORS["B"])]:
+        for label, vertex, color in [
+            ("A", VERTEX_A, COLORS["A"]),
+            ("B", VERTEX_B, COLORS["B"]),
+        ]:
             self.ax.scatter(*vertex, color=color, s=60, zorder=5)
-            self.ax.text(vertex[0]+0.3, vertex[1]+0.3, vertex[2]+0.5,
-                         f"IMU {label}", color=color, fontsize=9, fontweight="bold")
+            self.ax.text(
+                vertex[0] + 0.3,
+                vertex[1] + 0.3,
+                vertex[2] + 0.5,
+                f"IMU {label}",
+                color=color,
+                fontsize=9,
+                fontweight="bold",
+            )
 
     # ------------------------------------------------------------------
     # Dynamic artists (created once, updated every frame)
     # ------------------------------------------------------------------
 
     def _init_imu_artists(self):
-        self.imu_lines      = {}
-        self.imu_markers    = {}
-        self.imu_beams      = {}
+        self.imu_lines = {}
+        self.imu_markers = {}
+        self.imu_beams = {}
         self.imu_beam_texts = {}
-        self.imu_ref_lines  = {}   # 30 cm solid reference line through vertex
 
         for label, color in [("A", COLORS["A"]), ("B", COLORS["B"])]:
             lines = []
@@ -196,18 +239,14 @@ class DualIMUVisualization(QWidget):
             (mk,) = self.ax.plot([], [], [], "o", color=color, markersize=7, zorder=6)
             self.imu_markers[label] = mk
 
-            (bm,) = self.ax.plot([], [], [], "--",
-                                  color=COLORS["beam"][label], linewidth=1.5)
+            (bm,) = self.ax.plot(
+                [], [], [], "--", color=COLORS["beam"][label], linewidth=1.5
+            )
             self.imu_beams[label] = bm
 
             self.imu_beam_texts[label] = self.ax.text(
                 0, 0, 0, "", color=color, fontsize=8
             )
-
-            # Solid 30 cm reference line: starts at vertex, runs along z_dir.
-            # Represents the measurement axis passing through the mounting point.
-            (rl,) = self.ax.plot([], [], [], "-", color=color, linewidth=2.0, zorder=4)
-            self.imu_ref_lines[label] = rl
 
     # ------------------------------------------------------------------
     # Axes
@@ -219,11 +258,22 @@ class DualIMUVisualization(QWidget):
         self.ax.set_zlabel("Z (Up)    cm", labelpad=6)
         self.ax.set_box_aspect((1, 1, 1))
         self.ax.view_init(elev=25, azim=north_offset % 360)
-        self.ax.legend(handles=[
-            Line2D([0],[0], color=COLORS["A"],   lw=2,              label="IMU A (front-left)"),
-            Line2D([0],[0], color=COLORS["B"],   lw=2,              label="IMU B (front-right)"),
-            Line2D([0],[0], color=COLORS["box"], lw=1.2, alpha=0.5, label="Reference box"),
-        ], loc="upper left", fontsize=8)
+        self.ax.legend(
+            handles=[
+                Line2D([0], [0], color=COLORS["A"], lw=2, label="IMU A (front-left)"),
+                Line2D([0], [0], color=COLORS["B"], lw=2, label="IMU B (front-right)"),
+                Line2D(
+                    [0],
+                    [0],
+                    color=COLORS["box"],
+                    lw=1.2,
+                    alpha=0.5,
+                    label="Reference box",
+                ),
+            ],
+            loc="upper left",
+            fontsize=8,
+        )
 
     # ------------------------------------------------------------------
     # Convenience wrapper — store + redraw immediately (optional)
@@ -247,9 +297,8 @@ class DualIMUVisualization(QWidget):
             ("A", self._q1, self._dist1_mm, VERTEX_A),
             ("B", self._q2, self._dist2_mm, VERTEX_B),
         ]:
-            box_centre, ref_end = self._update_single_imu(label, q, dist_mm, vertex)
-            beam_ends.append(box_centre)
-            beam_ends.append(ref_end)
+            beam_end = self._update_single_imu(label, q, dist_mm, vertex)
+            beam_ends.append(beam_end)
 
         self._auto_scale(beam_ends)
         self.canvas.draw_idle()
@@ -279,20 +328,22 @@ class DualIMUVisualization(QWidget):
     #   SENSOR_FRAME = np.array([[ 0., 1., 0.],   # viz-X ← sensor-Y
     #                             [-1., 0., 0.],   # viz-Y ← -sensor-X
     #                             [ 0., 0., 1.]])  # viz-Z ← sensor-Z (beam)
-    _SENSOR_FRAME = np.eye(3)   # ← adjust here to fix axis mapping
+    _SENSOR_FRAME = np.eye(3)  # ← adjust here to fix axis mapping
 
     # 180° around the beam (Z) axis so the large face of the IMU rectangle
     # faces the vertex and the marker corner sits top-right.
-    _ROT180Z = np.array([
-        [-1.,  0.,  0.],
-        [ 0., -1.,  0.],
-        [ 0.,  0.,  1.],
-    ])
+    _ROT180Z = np.array(
+        [
+            [-1.0, 0.0, 0.0],
+            [0.0, -1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ]
+    )
 
     def _update_single_imu(self, label, q, dist_mm, vertex):
-        R        = quaternion_to_matrix(q)
-        dist_cm  = dist_mm / 10.0
-        color    = COLORS[label]
+        R = quaternion_to_matrix(q)
+        dist_cm = dist_mm / 10.0
+        color = COLORS[label]
 
         # Apply sensor-frame correction (identity by default — tune as needed).
         R_corr = R @ self._SENSOR_FRAME
@@ -301,14 +352,14 @@ class DualIMUVisualization(QWidget):
         z_dir = R_corr @ np.array([0.0, 0.0, 1.0])
 
         # R_box: additionally spin rectangle 180° so the large face faces vertex.
-        R_box = R_corr #@ self._ROT180Z
+        R_box = R_corr  # @ self._ROT180Z
 
         # Beam end: point along +z_dir from vertex by dist_cm.
         # The IMU's local +Z face is its "front" and must point toward the
         # vertex, so the IMU sits beyond beam_end with its -Z face flush there.
         # Box centre is therefore one half-thickness further out.
-        beam_end   = vertex - dist_cm * z_dir
-        box_centre = beam_end - IMU_HALF[2] * z_dir   # push box past beam tip
+        beam_end = vertex - dist_cm * z_dir
+        box_centre = beam_end - IMU_HALF[2] * z_dir  # push box past beam tip
 
         # ---- IMU box centred at box_centre, rotated by R_box ----
         translated_v = _imu_box_vertices(IMU_HALF) @ R_box.T + box_centre
@@ -321,13 +372,17 @@ class DualIMUVisualization(QWidget):
         # After the 180° Z rotation, local +X maps to -X and +Y to -Y,
         # so to land in the top-right corner (positive screen-X, positive screen-Y)
         # we use -X, +Y in the rotated frame, which is +X, -Y in R_box local space.
-        mk_world = R_box @ np.array([-IMU_HALF[0]*0.6, IMU_HALF[1]*0.6, -IMU_HALF[2]]) + box_centre
+        mk_world = (
+            R_box @ np.array([IMU_HALF[0] * 0.8, IMU_HALF[1] * 0.75, IMU_HALF[2]])
+            + box_centre
+        )
         self.imu_markers[label].set_data([mk_world[0]], [mk_world[1]])
         self.imu_markers[label].set_3d_properties([mk_world[2]])
 
         # ---- Dashed beam: vertex → beam_end (face of IMU toward vertex) ----
-        self.imu_beams[label].set_data([vertex[0], beam_end[0]],
-                                        [vertex[1], beam_end[1]])
+        self.imu_beams[label].set_data(
+            [vertex[0], beam_end[0]], [vertex[1], beam_end[1]]
+        )
         self.imu_beams[label].set_3d_properties([vertex[2], beam_end[2]])
 
         # ---- Distance label at beam midpoint ----
@@ -336,30 +391,25 @@ class DualIMUVisualization(QWidget):
         self.imu_beam_texts[label].set_3d_properties(mid[2])
         self.imu_beam_texts[label].set_text(f"{dist_mm:.1f} mm")
 
-        # ---- 30 cm reference line: vertex → vertex + 30 cm along z_dir ----
-        # Solid, IMU-coloured line showing the measurement axis through the
-        # mounting vertex. z_dir points from vertex toward the IMU box.
-        REF_LEN_CM = 30.0
-        ref_end = vertex + REF_LEN_CM * z_dir
-        self.imu_ref_lines[label].set_data(
-            [vertex[0], ref_end[0]],
-            [vertex[1], ref_end[1]],
-        )
-        self.imu_ref_lines[label].set_3d_properties([vertex[2], ref_end[2]])
-
         # ---- Arrow points from box back toward vertex (along -z_dir) ----
         if self._imu_arrows[label] is not None:
             self._imu_arrows[label].remove()
         arrow_len = max(1.5, abs(dist_cm) * 0.15 + 1.5)
         self._imu_arrows[label] = self.ax.quiver(
-            box_centre[0], box_centre[1], box_centre[2],
-            z_dir[0], z_dir[1], z_dir[2],
-            length=arrow_len, normalize=True,
-            arrow_length_ratio=0.25, linewidth=2,
+            box_centre[0],
+            box_centre[1],
+            box_centre[2],
+            z_dir[0],
+            z_dir[1],
+            z_dir[2],
+            length=arrow_len,
+            normalize=True,
+            arrow_length_ratio=0.25,
+            linewidth=2,
             color=color,
         )
 
-        return box_centre, ref_end
+        return box_centre
 
     # ------------------------------------------------------------------
     # Auto-scale axes
@@ -368,13 +418,15 @@ class DualIMUVisualization(QWidget):
     def _auto_scale(self, extra_pts=None):
         all_pts = list(extra_pts) if extra_pts else [VERTEX_A, VERTEX_B]
         pts = np.array(all_pts)
-        lo = np.minimum(pts.min(axis=0), [-BOX_L/2-2, -BOX_W/2-2, -BOX_H/2-2])
-        hi = np.maximum(pts.max(axis=0), [ BOX_L/2+2,  BOX_W/2+2,  BOX_H/2+2])
-        mid  = (lo + hi) / 2
+        lo = np.minimum(
+            pts.min(axis=0), [-BOX_L / 2 - 2, -BOX_W / 2 - 2, -BOX_H / 2 - 2]
+        )
+        hi = np.maximum(pts.max(axis=0), [BOX_L / 2 + 2, BOX_W / 2 + 2, BOX_H / 2 + 2])
+        mid = (lo + hi) / 2
         half = max((hi - lo).max() / 2, 8)
-        self.ax.set_xlim(mid[0]-half, mid[0]+half)
-        self.ax.set_ylim(mid[1]-half, mid[1]+half)
-        self.ax.set_zlim(mid[2]-half, mid[2]+half)
+        self.ax.set_xlim(mid[0] - half, mid[0] + half)
+        self.ax.set_ylim(mid[1] - half, mid[1] + half)
+        self.ax.set_zlim(mid[2] - half, mid[2] + half)
 
 
 # ---------------------------------------------------------------------------
@@ -402,13 +454,14 @@ if __name__ == "__main__":
     def _produce_data():
         global t
         angle_a = np.deg2rad(30 * np.sin(t * 0.5))
-        q1 = [np.cos(angle_a/2), np.sin(angle_a/2), 0.0, 0.0]
+        q1 = [np.cos(angle_a / 2), np.sin(angle_a / 2), 0.0, 0.0]
 
         angle_b = np.deg2rad(20 * np.sin(t * 0.4 + 1.0))
-        q2 = [np.cos(angle_b/2), 0.0, np.sin(angle_b/2), 0.0]
+        q2 = [np.cos(angle_b / 2), 0.0, np.sin(angle_b / 2), 0.0]
 
         imu_widget.load_latest_data(
-            q1, q2,
+            q1,
+            q2,
             80 + 40 * np.sin(t * 0.3),
             60 + 30 * np.cos(t * 0.35),
         )
@@ -416,6 +469,6 @@ if __name__ == "__main__":
 
     data_timer = QTimer()
     data_timer.timeout.connect(_produce_data)
-    data_timer.start(50)   # 20 Hz data feed; widget renders at TIMEOUT_MS
+    data_timer.start(50)  # 20 Hz data feed; widget renders at TIMEOUT_MS
 
     sys.exit(app.exec_())
