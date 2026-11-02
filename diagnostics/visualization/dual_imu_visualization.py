@@ -34,8 +34,8 @@ BOX_L = 18.0
 BOX_W = 10.0
 BOX_H = 9.0
 
-VERTEX_A = np.array([ BOX_L / 2, -BOX_W / 2,  BOX_H / 2])   # front-left-top
-VERTEX_B = np.array([ BOX_L / 2,  BOX_W / 2,  BOX_H / 2])   # front-right-top
+VERTEX_A = np.array([-BOX_L / 2, BOX_W / 2, BOX_H / 2])
+VERTEX_B = np.array([-BOX_L / 2, -BOX_W / 2, BOX_H / 2])
 
 IMU_HALF = np.array([1.5, 0.8, 0.2])   # half-extents of the IMU box visual (cm)
 
@@ -301,14 +301,14 @@ class DualIMUVisualization(QWidget):
         z_dir = R_corr @ np.array([0.0, 0.0, 1.0])
 
         # R_box: additionally spin rectangle 180° so the large face faces vertex.
-        R_box = R_corr @ self._ROT180Z
+        R_box = R_corr #@ self._ROT180Z
 
         # Beam end: point along +z_dir from vertex by dist_cm.
         # The IMU's local +Z face is its "front" and must point toward the
         # vertex, so the IMU sits beyond beam_end with its -Z face flush there.
         # Box centre is therefore one half-thickness further out.
-        beam_end   = vertex + dist_cm * z_dir
-        box_centre = beam_end + IMU_HALF[2] * z_dir   # push box past beam tip
+        beam_end   = vertex - dist_cm * z_dir
+        box_centre = beam_end - IMU_HALF[2] * z_dir   # push box past beam tip
 
         # ---- IMU box centred at box_centre, rotated by R_box ----
         translated_v = _imu_box_vertices(IMU_HALF) @ R_box.T + box_centre
@@ -353,7 +353,7 @@ class DualIMUVisualization(QWidget):
         arrow_len = max(1.5, abs(dist_cm) * 0.15 + 1.5)
         self._imu_arrows[label] = self.ax.quiver(
             box_centre[0], box_centre[1], box_centre[2],
-            -z_dir[0], -z_dir[1], -z_dir[2],
+            z_dir[0], z_dir[1], z_dir[2],
             length=arrow_len, normalize=True,
             arrow_length_ratio=0.25, linewidth=2,
             color=color,

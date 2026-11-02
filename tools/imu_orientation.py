@@ -24,10 +24,8 @@ from update_config import load_config
 from tools.serial_parser import SerialParser
 
 
-
-
 class IMUQuaternionTracker:
-    STARTING_GAIN = 0.8
+    STARTING_GAIN = 0.9
     SETTLED_GAIN = 0.2
 
     def __init__(self, name="left", config_file=CONFIG_FILENAME, use_offset=True):
@@ -112,15 +110,9 @@ class IMUQuaternionTracker:
         gyCal = math.radians(gy - self.gOffset["y"])
         gzCal = math.radians(gz - self.gOffset["z"])
 
-        mxCal = (
-            (mx - self.magOffset["x"]) * self.magScale["x"]
-        ) 
-        myCal = (
-            (my - self.magOffset["y"]) * self.magScale["y"]
-        ) 
-        mzCal = (
-            (mz - self.magOffset["z"]) * self.magScale["z"]
-        ) 
+        mxCal = (mx - self.magOffset["x"]) * self.magScale["x"]
+        myCal = (my - self.magOffset["y"]) * self.magScale["y"]
+        mzCal = (mz - self.magOffset["z"]) * self.magScale["z"]
 
         gyro_data = np.array([gxCal, gyCal, gzCal])
         acc_data = np.array([axCal, ayCal, azCal])
@@ -162,7 +154,7 @@ class IMUQuaternionTracker:
         if self.use_offset:
             q = self.apply_heading_offset(q)
 
-        return [round(float(value), 5) for value in q ]
+        return [round(float(value), 5) for value in q]
 
     def set_gain(self, gain=SETTLED_GAIN):
         """

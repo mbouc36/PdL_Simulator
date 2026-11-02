@@ -30,9 +30,7 @@ PROCESSED_CSV_COLUMNS = [
 
 
 class PostProcessingThread(QThread):
-    progress = pyqtSignal(int)
     processing_complete = pyqtSignal(str)
-    processing_error = pyqtSignal(str)
     data_valid = pyqtSignal(bool)
 
     def __init__(
@@ -82,7 +80,6 @@ class PostProcessingThread(QThread):
             left_imu.set_gain()
             right_imu.set_gain()
 
-
             self.clock_a, self.clock_b = self.calculate_clock_mapping(sensor_data)
 
             print(
@@ -94,7 +91,6 @@ class PostProcessingThread(QThread):
             if self.clock_a == 0:
                 raise ValueError("Invalid clock mapping: slope is zero.")
 
-            total_frames = len(camera_data)
 
             with open(
                 self.processed_data_csv,
@@ -106,6 +102,8 @@ class PostProcessingThread(QThread):
                 writer = csv.writer(file)
 
                 writer.writerow(PROCESSED_CSV_COLUMNS)
+
+                sensor_data_len = len(sensor_data)
 
                 for camera_idx, (
                     frame_number,
@@ -169,17 +167,16 @@ class PostProcessingThread(QThread):
                     )
 
                     writer.writerow(processed_data)
-                    percent = int(((camera_idx + 1) / total_frames) * 100)
 
-                    self.progress.emit(percent)
+                    if camera_idx + 1 == sensor_data_len:
+                        writer.writerow(processed_data)
 
             if self.running:
                 self.data_valid.emit(is_output_data_valid(self.output_folder))
-                self.progress.emit(100)
                 self.processing_complete.emit(self.processed_data_csv)
 
         except Exception as e:
-            self.processing_error.emit(str(e))
+            print(str(e))
 
         finally:
             self.running = False

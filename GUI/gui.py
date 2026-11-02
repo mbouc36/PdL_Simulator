@@ -36,7 +36,6 @@ class GUI(QWidget):
         self.resize(900, 600)
 
         self.name = ""
-        self.key = ""
         self.task_type = None
         self.name_to_key_file = name_to_key_file
         self.visualize = visualize
@@ -388,6 +387,7 @@ class GUI(QWidget):
                 return
 
             self.file_manager.update_name_to_key_file(name=name)
+            self.file_manager.update_key()
             # Clear any previous error
             error_label.setText("")
             name_box.clear()
@@ -491,7 +491,7 @@ class GUI(QWidget):
 
             # Clear any previous error
             error_label.setText("")
-            self.key = key
+            self.file_manager.key = key
             self.key_label.setText(f"User Key: {self.file_manager.key}")
             self.pages.setCurrentWidget(self.task_menu_page)
             return
@@ -640,7 +640,6 @@ class GUI(QWidget):
         new_task_btn.clicked.connect(lambda: go_to_task_menu_page())
 
         def logout_user():
-            self.key = ""
             self.name = ""
             self.pages.setCurrentWidget(self.login_page)
 

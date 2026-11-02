@@ -32,8 +32,6 @@ class FileManager:
     def __init__(self, name_to_key_file):
         self.create_name_to_key_file(name_to_key_file)
         self.key = None
-        while not self.is_new_key_vald(self.key):
-            self.key = self.create_key()
         self.tasks = [
             self.PEG_TRANSFER,
             self.PERCISION_CUTTING,
@@ -133,6 +131,10 @@ class FileManager:
         first_char = "".join(secrets.choice(characters))
 
         return first_char + "".join(secrets.choice(nums) for _ in range(length - 1))
+
+    def update_key(self):
+        while not self.is_new_key_vald(self.key):
+            self.key = self.create_key()
 
     def create_name_to_key_file(self, file_path):
 
