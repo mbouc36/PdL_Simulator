@@ -8,7 +8,7 @@ Description: Script which contains class used to manage gui
 import sys
 import os
 import cv2
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer, QElapsedTimer
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (
     QWidget,
@@ -25,7 +25,6 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from diagnostics.visualization.tool_visualization import ToolVisualization
 from data_thread import DataThread
 from file_manager import FileManager
-from diagnostics.validate_data import is_output_data_valid
 from tools.post_processing import PostProcessingThread
 
 
@@ -37,7 +36,6 @@ class GUI(QWidget):
         self.resize(900, 600)
 
         self.name = ""
-        self.key = ""
         self.task_type = None
         self.name_to_key_file = name_to_key_file
         self.visualize = visualize
@@ -66,6 +64,14 @@ class GUI(QWidget):
             border: 1px solid #B8B0A0;
         }
         """
+
+        # Timer init
+        self.task_timer = QElapsedTimer()
+        self.timer_update = QTimer(self)
+        self.timer_update.setInterval(10)  # refresh display every 10 ms
+        self.timer_update.timeout.connect(self.update_task_timer)
+        self.task_elapsed_ms = 0
+        self.timer_started = False
 
         # Create User Pages
         self.login_page = self.create_login_page()
@@ -155,21 +161,26 @@ class GUI(QWidget):
         overlay_layout.setContentsMargins(20, 20, 20, 20)
         overlay_layout.setSpacing(0)
 
-        complete_btn = QPushButton("Complete Task")
-        complete_btn.setFixedSize(120, 50)
+        complete_btn = QPushButton("Finish")
+        complete_btn.setFixedSize(200, 100)
 
         def complete_task():
+            self.stop_task_timer()
             if not self.test_mode:
                 self.data_thread.stop()
                 self.post_processing_thread = PostProcessingThread(
                     self.data_thread.output_folder
                 )
 
-                self.post_processing_thread.data_valid.connect(self.update_valid_data_label)
+                self.post_processing_thread.data_valid.connect(
+                    self.update_valid_data_label
+                )
                 self.post_processing_thread.start()
-                self.video_label.clear()
-                self.video_label.setText("Waiting for sensors to initialize")
-                self.video_label.setStyleSheet("background-color: black; color: white;")
+                # Update post-task timer display
+
+            self.post_task_timer_label.setText(
+                f"Task Time: {self.format_elapsed_time(self.task_elapsed_ms)}"
+            )
             self.pages.setCurrentWidget(self.post_task_page)
 
         complete_btn.clicked.connect(lambda checked=False: complete_task())
@@ -180,12 +191,40 @@ class GUI(QWidget):
                 color: black;
                 border: 1px solid #D8D0C0;
                 border-radius: 12px;
-                font-size: 16px;
+                font-size: 50px;
                 font-family: "Times New Roman";
             }
         """)
 
-        overlay_layout.addWidget(complete_btn, alignment=Qt.AlignTop | Qt.AlignRight)
+        # Timer
+        self.timer_label = QLabel("00.00.00")
+        self.timer_label.setAlignment(Qt.AlignCenter)
+
+        self.timer_label.setStyleSheet("""
+            QLabel {
+                background-color: #FFFFF0;
+                color: black;
+                border: 1px solid #D8D0C0;
+                border-radius: 25px;
+                padding: 5px 5px;
+                font-size: 100px;
+                font-family: "Times New Roman", Times, serif;
+                font-weight: bold;
+            }""")
+
+        self.timer_label.setFixedSize(440, 150)
+
+        # Top row containing Exit/Complete button and timer
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(0)
+
+        top_row.addWidget(complete_btn, alignment=Qt.AlignLeft | Qt.AlignTop)
+        top_row.addStretch(1)
+        top_row.addWidget(self.timer_label, alignment=Qt.AlignRight | Qt.AlignVCenter)
+
+        overlay_layout.setContentsMargins(5, 5, 5, 5)
+        overlay_layout.addLayout(top_row)
         overlay_layout.addStretch()
         if self.visualize:
             self.left_imu_visualization = ToolVisualization(180)
@@ -226,9 +265,7 @@ class GUI(QWidget):
             return
 
         if self.data_thread is None:
-            self.data_thread = DataThread(
-                self.file_manager.destination_folder
-            )
+            self.data_thread = DataThread(self.file_manager.destination_folder)
             self.data_thread.frame_ready.connect(self.update_video_frame)
         else:
             self.data_thread.set_output_folder(self.file_manager.destination_folder)
@@ -236,6 +273,9 @@ class GUI(QWidget):
         self.data_thread.start()
 
     def update_video_frame(self, frame):
+        if not self.timer_started:
+            self.start_task_timer()
+
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
         h, w, ch = frame.shape
@@ -347,11 +387,12 @@ class GUI(QWidget):
                 return
 
             self.file_manager.update_name_to_key_file(name=name)
+            self.file_manager.update_key()
             # Clear any previous error
             error_label.setText("")
             name_box.clear()
             self.name = name
-
+            self.key_label.setText(f"User Key: {self.file_manager.key}")
             self.pages.setCurrentWidget(self.task_menu_page)
             return
 
@@ -450,8 +491,8 @@ class GUI(QWidget):
 
             # Clear any previous error
             error_label.setText("")
-            self.key = key
-
+            self.file_manager.key = key
+            self.key_label.setText(f"User Key: {self.file_manager.key}")
             self.pages.setCurrentWidget(self.task_menu_page)
             return
 
@@ -477,10 +518,19 @@ class GUI(QWidget):
             margin-bottom: 12px;
         """)
 
+        self.key_label = QLabel("")
+        self.key_label.setAlignment(Qt.AlignCenter)
+        self.key_label.setStyleSheet("""
+            font-size: 24px;
+            color: black;
+            font-family: "Times New Roman", Times, serif;
+            margin-bottom: 12px;
+        """)
+
         warm_up_btn = QPushButton("Warm Up")
         peg_transfer_btn = QPushButton("Peg Transfer")
         precision_cutting_btn = QPushButton("Precision Cutting")
-        litigation_loop_btn = QPushButton("Litigation Loop")
+        ligating_loop_btn = QPushButton("Ligating Loop")
         in_suturing_btn = QPushButton("Intracorporeal Suturing")
         ex_suturing_btn = QPushButton("Extracorporeal Suturing")
 
@@ -488,13 +538,14 @@ class GUI(QWidget):
             warm_up_btn,
             peg_transfer_btn,
             precision_cutting_btn,
-            litigation_loop_btn,
+            ligating_loop_btn,
             in_suturing_btn,
             ex_suturing_btn,
         ]
 
         layout.addStretch()
         layout.addWidget(title)
+        layout.addWidget(self.key_label)
 
         for btn in buttons:
             btn.setFixedHeight(50)
@@ -510,9 +561,13 @@ class GUI(QWidget):
 
         def set_task(task):
             self.file_manager.update_destination_folder(task)
-            self.start_video()
+            self.reset_video_label()
             self.is_data_valid = False
+
+            self.reset_task_timer()
+
             self.pages.setCurrentWidget(self.video_page)
+            self.start_video()
 
         warm_up_btn.clicked.connect(lambda checked=False: set_task(FileManager.WARM_UP))
         peg_transfer_btn.clicked.connect(
@@ -521,8 +576,8 @@ class GUI(QWidget):
         precision_cutting_btn.clicked.connect(
             lambda checked=False: set_task(FileManager.PERCISION_CUTTING)
         )
-        litigation_loop_btn.clicked.connect(
-            lambda checked=False: set_task(FileManager.LITIGATION_LOOP)
+        ligating_loop_btn.clicked.connect(
+            lambda checked=False: set_task(FileManager.LIGATING_LOOP)
         )
         in_suturing_btn.clicked.connect(
             lambda checked=False: set_task(FileManager.INTRACORPOREAL_SUTURING)
@@ -543,6 +598,19 @@ class GUI(QWidget):
         """
         post_task_page = QWidget()
         layout = QVBoxLayout()
+
+        self.post_task_timer_label = QLabel("Task Time: 00.00.00")
+        self.post_task_timer_label.setAlignment(Qt.AlignCenter)
+
+        self.post_task_timer_label.setStyleSheet("""
+            QLabel {
+                font-size: 28px;
+                font-weight: bold;
+                color: black;
+                font-family: "Times New Roman";
+                margin-bottom: 20px;
+            }
+        """)
 
         title = QLabel("Task Complete")
         title.setAlignment(Qt.AlignCenter)
@@ -565,12 +633,13 @@ class GUI(QWidget):
             btn.setMaximumWidth(400)
             btn.setStyleSheet(self.btn_style)
 
-        new_task_btn.clicked.connect(
-            lambda: self.pages.setCurrentWidget(self.task_menu_page)
-        )
+        def go_to_task_menu_page():
+            self.key_label.setText(f"User Key: {self.file_manager.key}")
+            self.pages.setCurrentWidget(self.task_menu_page)
+
+        new_task_btn.clicked.connect(lambda: go_to_task_menu_page())
 
         def logout_user():
-            self.key = ""
             self.name = ""
             self.pages.setCurrentWidget(self.login_page)
 
@@ -578,6 +647,7 @@ class GUI(QWidget):
 
         layout.addStretch()
         layout.addWidget(title)
+        layout.addWidget(self.post_task_timer_label, alignment=Qt.AlignCenter)
         layout.addWidget(new_task_btn, alignment=Qt.AlignCenter)
         layout.addWidget(logout_btn, alignment=Qt.AlignCenter)
         layout.addStretch()
@@ -598,8 +668,72 @@ class GUI(QWidget):
             self.valid_data_label.setText("Invalid")
             self.valid_data_label.setStyleSheet("color: red;")
 
+    def reset_video_label(self):
+        self.video_label.clear()
+        self.video_label.setPixmap(QPixmap())  # explicitly remove pixmap
+        self.video_label.setText("Waiting for Sensors to Initialize...")
+        self.video_label.setStyleSheet(
+            "background-color: black; color: white;" "font: 24px"
+        )
+        self.video_label.repaint()
+
     def closeEvent(self, event):
         if self.data_thread is not None:
             self.data_thread.stop()
 
         event.accept()
+
+    def start_task_timer(self):
+        """Start the task stopwatch."""
+
+        self.task_elapsed_ms = 0
+        self.timer_started = True
+
+        self.task_timer.start()
+        self.timer_update.start()
+
+        self.timer_label.setText("00.00.00")
+
+    def stop_task_timer(self):
+        """Stop the stopwatch and save the final elapsed time."""
+        if self.task_timer.isValid():
+            self.task_elapsed_ms = self.task_timer.elapsed()
+
+        self.timer_update.stop()
+        self.timer_started = False
+        # Make sure the final displayed value is exact
+        self.timer_label.setText(self.format_elapsed_time(self.task_elapsed_ms))
+
+    def update_task_timer(self):
+        """Update the stopwatch displayed on the video page."""
+        if not self.task_timer.isValid():
+            return
+
+        elapsed_ms = self.task_timer.elapsed()
+
+        self.timer_label.setText(self.format_elapsed_time(elapsed_ms))
+
+    def format_elapsed_time(self, elapsed_ms):
+        """
+        Format milliseconds as:
+
+            MM.SS.CC
+
+        where CC is hundredths of a second.
+        """
+
+        minutes = elapsed_ms // 60000
+        seconds = (elapsed_ms % 60000) // 1000
+        hundredths = (elapsed_ms % 1000) // 10
+
+        return f"{minutes:02d}.{seconds:02d}.{hundredths:02d}"
+
+    def reset_task_timer(self):
+        """Reset the task timer without starting it."""
+        self.timer_update.stop()
+
+        self.task_elapsed_ms = 0
+        self.timer_started = False
+
+        self.task_timer.invalidate()
+        self.timer_label.setText("00.00.00")

@@ -138,11 +138,12 @@ class ToolVisualization(QWidget):
         self.latest_quaternion = [1.0, 0.0, 0.0, 0.0]
         self.latest_distance = 0
         self.data_age = 0
-
+        self.z_arrow = None
         self.update_orientation()
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.TimerType.PreciseTimer)
         self.timer.timeout.connect(self.update_orientation)
+        
         self.timer.start(TIMEOUT_MS)
 
     def set_north_offset(self, north_offset):
@@ -208,22 +209,18 @@ class ToolVisualization(QWidget):
         # Visual scaling
         # ---------------------------------
 
-        # Minimum scale keeps the tool its normal size nearby.
-        # As distance increases, scale the box proportionally.
         visual_scale = max(1.0, abs(self.latest_distance) / 5.0)
 
         vertices = self.base_vertices * visual_scale
         front_marker = self.base_front_marker * visual_scale
 
-        # Thickness of box in the local +Z direction
         half_thickness = 0.2 * visual_scale
 
         # ---------------------------------
         # Position the tool
         # ---------------------------------
 
-        # Keep the +Z face exactly 'distance' away from origin
-        center = (self.latest_distance - half_thickness) * z_direction
+        center = -(self.latest_distance + half_thickness) * z_direction
 
         # ---------------------------------
         # Rotate + translate vertices
@@ -232,7 +229,6 @@ class ToolVisualization(QWidget):
         rotated = vertices @ R.T
         translated = rotated + center
 
-        # Update edges
         for line, (start, end) in zip(self.lines, self.edges):
 
             p1 = translated[start]
@@ -260,23 +256,41 @@ class ToolVisualization(QWidget):
         self.marker.set_3d_properties([marker[2]])
 
         # ---------------------------------
-        # Distance line
-        # ---------------------------------
-
         # +Z face center
-        face_center = center + half_thickness * z_direction
+        # ---------------------------------
+        # Center of the +Z face (same position as arrow)
+
+        face_center = -self.latest_distance * z_direction
+
+        # Line extends from origin to the +Z face
+
+        line_start = np.array([0.0, 0.0, 0.0])
+
+        line_end = face_center
 
         self.distance_line.set_data(
-            [0, face_center[0]],
-            [0, face_center[1]],
+
+            [line_start[0], line_end[0]],
+
+            [line_start[1], line_end[1]],
+
         )
 
-        self.distance_line.set_3d_properties([0, face_center[2]])
+        self.distance_line.set_3d_properties(
 
-        # Distance label
-        midpoint = face_center / 2
+            [line_start[2], line_end[2]]
 
-        self.distance_text.set_position((midpoint[0], midpoint[1]))
+        )
+
+        # Distance label at midpoint
+
+        midpoint = (line_start + line_end) / 2
+
+        self.distance_text.set_position(
+
+            (midpoint[0], midpoint[1])
+
+        )
 
         self.distance_text.set_3d_properties(midpoint[2])
 
@@ -286,12 +300,15 @@ class ToolVisualization(QWidget):
         # Dynamically scale background
         # ---------------------------------
 
-        points = np.vstack([translated, np.array([[0.0, 0.0, 0.0]])])
+        points = np.vstack([
+            translated,
+            np.array([[0.0, 0.0, 0.0]]),
+            line_end.reshape(1, 3),
+        ])
 
         min_vals = points.min(axis=0)
         max_vals = points.max(axis=0)
 
-        # Padding proportional to current view size
         padding = max(0.5, abs(self.latest_distance) * 0.1)
 
         min_vals -= padding
@@ -303,10 +320,41 @@ class ToolVisualization(QWidget):
         midpoints = (max_vals + min_vals) / 2
         half_range = max_range / 2
 
-        self.ax.set_xlim(midpoints[0] - half_range, midpoints[0] + half_range)
+        self.ax.set_xlim(
+            midpoints[0] - half_range,
+            midpoints[0] + half_range
+        )
 
-        self.ax.set_ylim(midpoints[1] - half_range, midpoints[1] + half_range)
+        self.ax.set_ylim(
+            midpoints[1] - half_range,
+            midpoints[1] + half_range
+        )
 
-        self.ax.set_zlim(midpoints[2] - half_range, midpoints[2] + half_range)
+        self.ax.set_zlim(
+            midpoints[2] - half_range,
+            midpoints[2] + half_range
+        )
+
+        # ---------------------------------
+        # +Z direction arrow
+        # ---------------------------------
+
+        if self.z_arrow is not None:
+            self.z_arrow.remove()
+
+        arrow_length = 1.0 * visual_scale
+
+        self.z_arrow = self.ax.quiver(
+            face_center[0],
+            face_center[1],
+            face_center[2],
+            z_direction[0],
+            z_direction[1],
+            z_direction[2],
+            length=arrow_length,
+            normalize=True,
+            arrow_length_ratio=0.25,
+            linewidth=2,
+        )
 
         self.canvas.draw()

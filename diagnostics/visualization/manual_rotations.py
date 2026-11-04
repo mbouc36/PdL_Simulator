@@ -10,10 +10,10 @@ from PyQt5.QtCore import QThread, pyqtSignal
 from time import sleep
 import sys
 
-from rotation_visualization import RotationVisualization
+from tool_visualization import ToolVisualization
 
 
-class DisplayThread(RotationVisualization):
+class DisplayThread(ToolVisualization):
     def __init__(self, rotations, time_interval=5):
         super().__init__()
         self.data_thread = RotationThread(rotations, time_interval)
@@ -22,7 +22,7 @@ class DisplayThread(RotationVisualization):
 
 
 class RotationThread(QThread):
-    quaternion_data = pyqtSignal(list)
+    quaternion_data = pyqtSignal(list, int)
 
     def __init__(self, rotations, time_interval):
         super().__init__()
@@ -38,7 +38,7 @@ class RotationThread(QThread):
         sleep(self.time_interval)
         for rotation in self.rotations:
             print(rotation)
-            self.quaternion_data.emit(rotation)
+            self.quaternion_data.emit(rotation, 0)
             print(f"Performing rotation: {rotation}")
 
             sleep(self.time_interval)
