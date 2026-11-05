@@ -21,6 +21,8 @@ CONFIG_PATH = os.path.join(
 
 CONIFG_ELEMENT_NAME = "heading_offset"
 
+EULEUR_ANGLE_CONVENTION = "xyz"
+
 
 def get_orientation(
     first_imu_name, right_imu_name, num_samples=100, num_init_samples=400
@@ -34,7 +36,7 @@ def get_orientation(
     tof_manager = TOFManager()
     left_imu = IMUQuaternionTracker(name=first_imu_name, use_offset=True)
     right_imu = IMUQuaternionTracker(name=right_imu_name, use_offset=True)
-    input("Press ENTER when tools are in positioned")
+    input("Press ENTER when tools are in position")
     serial_parser.reset_input_buffer()
     left_q_samples = []
     right_q_samples = []
@@ -130,8 +132,8 @@ def compute_offset_quaternions(first_imu_name="left", second_imu_name="right"):
     left_average_distance = left_distance / len(left_distances)
     right_average_distance = right_distance / len(right_distances)
 
-    print("Left Quaternion", left_average_rotation.as_euler(), "Left Distance", left_average_distance)
-    print("Right Quaternion", right_average_rotation.as_euler(), "Right Distance", right_average_distance)
+    print("Left Quaternion", left_average_rotation.as_euler(EULEUR_ANGLE_CONVENTION,degrees=True), "Left Distance", left_average_distance)
+    print("Right Quaternion", right_average_rotation.as_euler(EULEUR_ANGLE_CONVENTION,degrees=True), "Right Distance", right_average_distance)
 
 
 if __name__ == "__main__":
