@@ -117,24 +117,25 @@ class OrientationCheck():
         return rotations.mean()
 
 
-    def compute_offset_quaternions(self, first_imu_name="left", second_imu_name="right"):
-        user_input = input("Press ENTER when tools are in position (or type 'exit'): ")
-        if user_input.strip().lower() == "exit":
-            print("Exiting")
-            return 
-        else:
-            left_q_samples, right_q_samples, left_distances, right_distances = self.get_orientation()
+    def compute_offset_quaternions(self):
+        while (True):
+            user_input = input("Press ENTER when tools are in position (or type 'exit'): ")
+            if user_input.strip().lower() == "exit":
+                print("Exiting")
+                break 
+            else:
+                left_q_samples, right_q_samples, left_distances, right_distances = self.get_orientation()
 
-            left_distance = sum(left_distances)
-            right_distance = sum(right_distances)
+                left_distance = sum(left_distances)
+                right_distance = sum(right_distances)
 
-            left_average_rotation = self.compute_average_quaternion(left_q_samples)
-            right_average_rotation = self.compute_average_quaternion(right_q_samples)
-            left_average_distance = round(left_distance / len(left_distances),2)
-            right_average_distance = round(right_distance / len(right_distances), 2)
+                left_average_rotation = self.compute_average_quaternion(left_q_samples)
+                right_average_rotation = self.compute_average_quaternion(right_q_samples)
+                left_average_distance = round(left_distance / len(left_distances),2)
+                right_average_distance = round(right_distance / len(right_distances), 2)
 
-            print("Left Quaternion", left_average_rotation.as_euler(EULEUR_ANGLE_CONVENTION,degrees=True), "Left Distance", left_average_distance)
-            print("Right Quaternion", right_average_rotation.as_euler(EULEUR_ANGLE_CONVENTION,degrees=True), "Right Distance", right_average_distance)
+                print("Left Quaternion", left_average_rotation.as_euler(EULEUR_ANGLE_CONVENTION,degrees=True), "Left Distance", left_average_distance)
+                print("Right Quaternion", right_average_rotation.as_euler(EULEUR_ANGLE_CONVENTION,degrees=True), "Right Distance", right_average_distance)
 
 
 if __name__ == "__main__":
