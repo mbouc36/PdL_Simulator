@@ -129,8 +129,8 @@ def compute_offset_quaternions(first_imu_name="left", second_imu_name="right"):
 
     left_average_rotation = compute_average_quaternion(left_q_samples)
     right_average_rotation = compute_average_quaternion(right_q_samples)
-    left_average_distance = left_distance / len(left_distances)
-    right_average_distance = right_distance / len(right_distances)
+    left_average_distance = round(left_distance / len(left_distances),2)
+    right_average_distance = round(right_distance / len(right_distances), 2)
 
     print("Left Quaternion", left_average_rotation.as_euler(EULEUR_ANGLE_CONVENTION,degrees=True), "Left Distance", left_average_distance)
     print("Right Quaternion", right_average_rotation.as_euler(EULEUR_ANGLE_CONVENTION,degrees=True), "Right Distance", right_average_distance)
