@@ -60,7 +60,7 @@ class OrientationCheck():
         self.left_imu.set_gain()
         self.right_imu.set_gain()
 
-    def get_orientation(self, num_samples=100):
+    def get_orientation(self, num_samples=400):
         """
         Get x samples of quaternions from both left and right IMUs, 
         """
@@ -108,14 +108,22 @@ class OrientationCheck():
         return left_q_samples, right_q_samples, left_distances, right_distances
 
 
-    def compute_average_quaternion(self, samples: list[tuple[list[float]]]) -> Rotation:
-        """
-        Get average quaternion from both left and right imus over the sample size
-        """
-
-        # convert Quaternion into roation object
+    def compute_average_quaternion(self, samples):
         rotations = Rotation.from_quat(samples, scalar_first=True)
-        return rotations.mean()
+
+        average_rotation = rotations.mean()
+
+        differences = (
+            average_rotation.inv() * rotations
+        ).magnitude()
+
+        differences = np.degrees(differences)
+
+        print(f"Mean deviation: {np.mean(differences):.2f}°")
+        print(f"Max deviation: {np.max(differences):.2f}°")
+        print(f"Standard deviation: {np.std(differences):.2f}°")
+
+        return average_rotation
 
 
 
@@ -125,7 +133,7 @@ class OrientationCheck():
         angle = np.degrees(relative_rotation.magnitude())
 
         # Convert to percentage
-        return (angle / 180) * 100
+        return angle 
 
     def compute_offset_quaternions(self):
         old_left_q = None
