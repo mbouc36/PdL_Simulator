@@ -7,6 +7,7 @@ Description: Place the tools at a certain position and measure a quaternion, pri
 
 import os
 import sys
+import numpy as np
 from time import sleep
 from scipy.spatial.transform import Rotation
 
@@ -63,7 +64,7 @@ class OrientationCheck():
         """
         Get x samples of quaternions from both left and right IMUs, 
         """
-        self.serial_parser.reset_input_buffer()
+        
         left_q_samples = []
         right_q_samples = []
 
@@ -117,7 +118,18 @@ class OrientationCheck():
         return rotations.mean()
 
 
+
+    def quaternion_difference(self, r1 :Rotation, r2:Rotation):
+        relative_rotation = r1.inv() * r2
+        # Angular difference in degrees (0° to 180°)
+        angle = np.degrees(relative_rotation.magnitude())
+
+        # Convert to percentage
+        return (angle / 180) * 100
+
     def compute_offset_quaternions(self):
+        old_left_q = None
+        old_right_q = None
         while (True):
             user_input = input("Press ENTER when tools are in position (or type 'exit'): ")
             if user_input.strip().lower() == "exit":
@@ -134,8 +146,20 @@ class OrientationCheck():
                 left_average_distance = round(left_distance / len(left_distances),2)
                 right_average_distance = round(right_distance / len(right_distances), 2)
 
-                print("Left Quaternion", left_average_rotation.as_euler(EULEUR_ANGLE_CONVENTION,degrees=True), "Left Distance", left_average_distance)
-                print("Right Quaternion", right_average_rotation.as_euler(EULEUR_ANGLE_CONVENTION,degrees=True), "Right Distance", right_average_distance)
+                
+
+                print("Left Quaternion", left_average_rotation.as_quat(scalar_first=True), "Left Distance", left_average_distance)
+                print("Right Quaternion", right_average_rotation.as_quat(scalar_first=True), "Right Distance", right_average_distance)
+
+                if old_left_q is not None and old_right_q is not None:
+                    print("Left Quat diff %", self.quaternion_difference(old_left_q, left_average_rotation))
+                    print("Right Quat diff %", self.quaternion_difference(old_right_q, right_average_rotation))
+
+                print("Left Euler", left_average_rotation.as_euler(EULEUR_ANGLE_CONVENTION,degrees=True), "Left Distance", left_average_distance)
+                print("Right Euler", right_average_rotation.as_euler(EULEUR_ANGLE_CONVENTION,degrees=True), "Right Distance", right_average_distance)
+
+                old_left_q = left_average_rotation
+                old_right_q = right_average_rotation
 
 
 if __name__ == "__main__":
