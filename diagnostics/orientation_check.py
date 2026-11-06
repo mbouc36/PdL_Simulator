@@ -4,11 +4,13 @@ Date: 2026, Oct 11
 Version: 1.0
 Description: Place the tools at a certain position and measure a quaternion, print the value 
 """
-
 import os
 import sys
+import threading
+import time
+from dataclasses import dataclass
+
 import numpy as np
-from time import sleep
 from scipy.spatial.transform import Rotation
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -19,157 +21,247 @@ from tools.tof_manager import TOFManager
 CONFIG_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "../calibration/imu_calibration/cal_data.json"
 )
+CONFIG_ELEMENT_NAME = "heading_offset"
+EULER_ANGLE_CONVENTION = "xyz"
 
-CONIFG_ELEMENT_NAME = "heading_offset"
 
-EULEUR_ANGLE_CONVENTION = "xyz"
-class OrientationCheck():
-    def __init__(self, first_imu_name="left", right_imu_name="right"):
+@dataclass(frozen=True)
+class Sample:
+    """One processed reading, published by the producer."""
+    seq: int
+    serial_time: float
+    left_q: np.ndarray       # scalar-first quaternion
+    right_q: np.ndarray      # scalar-first quaternion
+    left_distance: float
+    right_distance: float
+
+
+# --------------------------------------------------------------------------- #
+# Producer
+# --------------------------------------------------------------------------- #
+class SensorProducer(threading.Thread):
+    """
+    Continuously reads the serial port, runs the IMU and ToF trackers and
+    publishes the latest processed sample into shared state.
+
+    The IMU trackers and serial parser are only ever touched from this thread,
+    so they need no locking. Only the published Sample is shared.
+    """
+
+    def __init__(self, left_imu_name="left", right_imu_name="right",
+                 num_init_samples=400, settle_time=5.0):
+        super().__init__(name="SensorProducer", daemon=True)
+
         self.serial_parser = SerialParser()
         self.tof_manager = TOFManager()
-        self.left_imu = IMUQuaternionTracker(name=first_imu_name, use_offset=True)
+        self.left_imu = IMUQuaternionTracker(name=left_imu_name, use_offset=True)
         self.right_imu = IMUQuaternionTracker(name=right_imu_name, use_offset=True)
-        self.converge_immus()
 
-    def converge_immus(self, num_init_samples=400):
-        print("Hold tools still")
-        sleep(5)
-        init_samples = 0
-        while init_samples < num_init_samples:
+        self.num_init_samples = num_init_samples
+        self.settle_time = settle_time
+
+        # Shared state (guarded by _cond)
+        self._cond = threading.Condition()
+        self._latest = None
+        self._seq = 0
+
+        # Convergence progress (read-only for other threads, informational)
+        self.settling = True
+        self.init_progress = 0
+
+        self.converged = threading.Event()
+        self._stop_event = threading.Event()
+        self.error = None
+
+    # ---- lifecycle -------------------------------------------------------- #
+    def stop(self):
+        self._stop_event.set()
+        with self._cond:
+            self._cond.notify_all()
+
+    @property
+    def is_running(self):
+        return not self._stop_event.is_set()
+
+    def run(self):
+        try:
+            self._loop()
+        except Exception as exc:  # surface errors to the consumer
+            self.error = exc
+        finally:
+            self._stop_event.set()
+            with self._cond:
+                self._cond.notify_all()
+
+    # ---- main loop -------------------------------------------------------- #
+    def _loop(self):
+        start = time.monotonic()
+
+        while not self._stop_event.is_set():
             serial_line = self.serial_parser.get_serial_line()
-
-            if serial_line == None:
+            if serial_line is None:
                 continue
 
             serial_time = serial_line[SerialParser.TIME_INDEX]
-            self.left_imu.get_quaternion(
+            left_q = self.left_imu.get_quaternion(
                 [serial_time] + serial_line[SerialParser.LEFT_IMU_INDICES]
             )
-            self.right_imu.get_quaternion(
+            right_q = self.right_imu.get_quaternion(
                 [serial_time] + serial_line[SerialParser.RIGHT_IMU_INDICES]
             )
-            init_samples += 1
-
-            print(
-                f"\rInitializing IMUs: {init_samples}/{num_init_samples}",
-                end="",
-                flush=True,
+            distances = self.tof_manager.get_distances(
+                [serial_line[SerialParser.LEFT_DISTANCE_INDEX],
+                 serial_line[SerialParser.RIGHT_DISTANCE_INDEX]]
             )
-        print()
 
-        self.left_imu.set_gain()
-        self.right_imu.set_gain()
-
-    def get_orientation(self, num_samples=400):
-        """
-        Get x samples of quaternions from both left and right IMUs, 
-        """
-        
-        left_q_samples = []
-        right_q_samples = []
-
-        left_distances = []
-        right_distances = []
-        
-        self.serial_parser.reset_input_buffer()
-
-        while len(left_q_samples) < num_samples and len(right_q_samples) < num_samples:
-
-            serial_line = self.serial_parser.get_serial_line()
-
-            if serial_line == None:
+            # Convergence phase: keep feeding the filters, but don't publish.
+            if not self.converged.is_set():
+                if time.monotonic() - start < self.settle_time:
+                    continue
+                self.settling = False
+                self.init_progress += 1
+                if self.init_progress >= self.num_init_samples:
+                    self.left_imu.set_gain()
+                    self.right_imu.set_gain()
+                    self.converged.set()
                 continue
-
-            serial_time = serial_line[SerialParser.TIME_INDEX]
-            left_imu_data = [serial_time] + serial_line[SerialParser.LEFT_IMU_INDICES]
-            right_imu_data = [serial_time] + serial_line[SerialParser.RIGHT_IMU_INDICES]
-            tof_data = [serial_line[SerialParser.LEFT_DISTANCE_INDEX], serial_line[SerialParser.RIGHT_DISTANCE_INDEX]]
-            left_q = self.left_imu.get_quaternion(left_imu_data)
-            right_q = self.right_imu.get_quaternion(right_imu_data)
-            distances = self.tof_manager.get_distances(tof_data)
 
             if left_q is None or right_q is None:
                 continue
 
-            left_q_samples.append(left_q)
-            right_q_samples.append(right_q)
+            with self._cond:
+                self._seq += 1
+                self._latest = Sample(
+                    seq=self._seq,
+                    serial_time=serial_time,
+                    left_q=np.array(left_q, dtype=float),
+                    right_q=np.array(right_q, dtype=float),
+                    left_distance=distances[0],
+                    right_distance=distances[1],
+                )
+                self._cond.notify_all()
 
-            left_distances.append(distances[0])
-            right_distances.append(distances[1])
+    # ---- consumer-facing API --------------------------------------------- #
+    @property
+    def current_seq(self):
+        with self._cond:
+            return self._seq
 
-            print(
-                f"\rCollecting samples: {len(left_q_samples)}/{num_samples}",
-                end="",
-                flush=True,
+    def wait_for_new_sample(self, last_seq, timeout=1.0):
+        """Block until a sample newer than last_seq exists. Returns None on timeout/stop."""
+        with self._cond:
+            self._cond.wait_for(
+                lambda: self._seq > last_seq or self._stop_event.is_set(),
+                timeout=timeout,
             )
+            if self._latest is not None and self._latest.seq > last_seq:
+                return self._latest
+            return None
+
+
+# --------------------------------------------------------------------------- #
+# Consumer
+# --------------------------------------------------------------------------- #
+class OrientationConsumer:
+    def __init__(self, producer: SensorProducer, num_samples=400, convergence_timeout=60.0):
+        self.producer = producer
+        self.num_samples = num_samples
+        self.convergence_timeout = convergence_timeout
+
+    def _check_producer(self):
+        if not self.producer.is_running:
+            raise RuntimeError("Sensor producer stopped") from self.producer.error
+
+    def wait_for_convergence(self):
+        print("Hold tools still")
+        deadline = time.monotonic() + self.convergence_timeout
+
+        while not self.producer.converged.wait(timeout=0.1):
+            self._check_producer()
+            if time.monotonic() > deadline:
+                raise TimeoutError("IMUs did not converge in time")
+
+            if self.producer.settling:
+                msg = "Settling..."
+            else:
+                msg = f"Initializing IMUs: {self.producer.init_progress}/{self.producer.num_init_samples}"
+            print(f"\r{msg:<40}", end="", flush=True)
+
+        print("\rIMUs converged." + " " * 30)
+
+    def collect_samples(self):
+        """Collect num_samples fresh samples produced after this call starts."""
+        samples = []
+        last_seq = self.producer.current_seq  # ignore anything produced before ENTER
+
+        while len(samples) < self.num_samples:
+            sample = self.producer.wait_for_new_sample(last_seq, timeout=1.0)
+            if sample is None:
+                self._check_producer()
+                continue
+
+            samples.append(sample)
+            last_seq = sample.seq
+            print(f"\rCollecting samples: {len(samples)}/{self.num_samples}", end="", flush=True)
 
         print()
+        return samples
 
-        return left_q_samples, right_q_samples, left_distances, right_distances
-
-
-    def compute_average_quaternion(self, samples):
-        rotations = Rotation.from_quat(samples, scalar_first=True)
-
+    @staticmethod
+    def compute_average_quaternion(quats):
+        rotations = Rotation.from_quat(np.asarray(quats), scalar_first=True)
         average_rotation = rotations.mean()
 
-        differences = (
-            average_rotation.inv() * rotations
-        ).magnitude()
-
-        differences = np.degrees(differences)
-
+        differences = np.degrees((average_rotation.inv() * rotations).magnitude())
         print(f"Mean deviation: {np.mean(differences):.2f}°")
         print(f"Max deviation: {np.max(differences):.2f}°")
         print(f"Standard deviation: {np.std(differences):.2f}°")
 
         return average_rotation
 
+    @staticmethod
+    def quaternion_difference(r1: Rotation, r2: Rotation):
+        """Angular difference in degrees (0° to 180°)."""
+        return np.degrees((r1.inv() * r2).magnitude())
 
+    def run(self):
+        old_left, old_right = None, None
 
-    def quaternion_difference(self, r1 :Rotation, r2:Rotation):
-        relative_rotation = r1.inv() * r2
-        # Angular difference in degrees (0° to 180°)
-        angle = np.degrees(relative_rotation.magnitude())
-
-        # Convert to percentage
-        return angle 
-
-    def compute_offset_quaternions(self):
-        old_left_q = None
-        old_right_q = None
-        while (True):
+        while True:
             user_input = input("Press ENTER when tools are in position (or type 'exit'): ")
             if user_input.strip().lower() == "exit":
                 print("Exiting")
-                break 
-            else:
-                left_q_samples, right_q_samples, left_distances, right_distances = self.get_orientation()
+                break
 
-                left_distance = sum(left_distances)
-                right_distance = sum(right_distances)
+            samples = self.collect_samples()
 
-                left_average_rotation = self.compute_average_quaternion(left_q_samples)
-                right_average_rotation = self.compute_average_quaternion(right_q_samples)
-                left_average_distance = round(left_distance / len(left_distances),2)
-                right_average_distance = round(right_distance / len(right_distances), 2)
+            left_rot = self.compute_average_quaternion([s.left_q for s in samples])
+            right_rot = self.compute_average_quaternion([s.right_q for s in samples])
+            left_dist = round(float(np.mean([s.left_distance for s in samples])), 2)
+            right_dist = round(float(np.mean([s.right_distance for s in samples])), 2)
 
-                
+            print("Left Quaternion", left_rot.as_quat(scalar_first=True), "Left Distance", left_dist)
+            print("Right Quaternion", right_rot.as_quat(scalar_first=True), "Right Distance", right_dist)
 
-                print("Left Quaternion", left_average_rotation.as_quat(scalar_first=True), "Left Distance", left_average_distance)
-                print("Right Quaternion", right_average_rotation.as_quat(scalar_first=True), "Right Distance", right_average_distance)
+            if old_left is not None and old_right is not None:
+                print("Left Quat diff (deg)", self.quaternion_difference(old_left, left_rot))
+                print("Right Quat diff (deg)", self.quaternion_difference(old_right, right_rot))
 
-                if old_left_q is not None and old_right_q is not None:
-                    print("Left Quat diff %", self.quaternion_difference(old_left_q, left_average_rotation))
-                    print("Right Quat diff %", self.quaternion_difference(old_right_q, right_average_rotation))
+            print("Left Euler", left_rot.as_euler(EULER_ANGLE_CONVENTION, degrees=True), "Left Distance", left_dist)
+            print("Right Euler", right_rot.as_euler(EULER_ANGLE_CONVENTION, degrees=True), "Right Distance", right_dist)
 
-                print("Left Euler", left_average_rotation.as_euler(EULEUR_ANGLE_CONVENTION,degrees=True), "Left Distance", left_average_distance)
-                print("Right Euler", right_average_rotation.as_euler(EULEUR_ANGLE_CONVENTION,degrees=True), "Right Distance", right_average_distance)
-
-                old_left_q = left_average_rotation
-                old_right_q = right_average_rotation
+            old_left, old_right = left_rot, right_rot
 
 
 if __name__ == "__main__":
-    orientation_check = OrientationCheck()
-    orientation_check.compute_offset_quaternions()
+    producer = SensorProducer()
+    producer.start()
+    try:
+        consumer = OrientationConsumer(producer)
+        consumer.wait_for_convergence()
+        consumer.run()
+    except KeyboardInterrupt:
+        print("\nInterrupted")
+    finally:
+        producer.stop()
+        producer.join(timeout=2.0)
