@@ -1,23 +1,18 @@
 
 """
 Author: Joya
-Version: 4.1 - Z-calibrated live visualization
+Version: 4.2 — Z-calibrated visualization
 
 Description:
-Live 3D visualization of two tools using IMU quaternions
+Live dual-tool 3D visualization using IMU quaternions
 and ToF distance measurements.
 
-Each tool displays:
-- Fixed RCM
-- ToF sensor position
-- Handle wall position
-- Full tool shaft (wall to tip)
-- Calculated tool tip
-- Live ToF distance
-
-All positions are in millimeters relative to Left RCM.
-Press Z with left tool aimed at R1C1 and right tool aimed at R1C7.
-No measurements are written to disk.
+Version 4.1:
+- Left tool tip shortened by 15.6 mm
+- Right tool tip shortened by 21.2 mm
+- Corrections applied along each tool's local -Z axis
+- Press Z to align tool directions with R1C1 and R1C7
+- No data is saved
 """
 
 import os
@@ -28,14 +23,9 @@ import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 
 from scipy.spatial.transform import Rotation
-from PyQt5.QtWidgets import (
-    QApplication,
-    QWidget,
-    QVBoxLayout,
-    QLabel,
-    QPushButton,
-)
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QPushButton
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
+import time
 
 sys.path.append(
     os.path.join(
@@ -60,36 +50,37 @@ BAUD_RATE = config["baud_rate"]
 
 COUNT_TILL_SETTLED = 400
 
-# Quaternion format returned by IMUQuaternionTracker
 QUATERNION_ORDER = "wxyz"
-
-# Set True if the quaternion represents world-to-sensor
-# rather than sensor-to-world rotation.
 INVERT_QUATERNION = False
+MAX_ZERO_SAMPLE_AGE_S = 0.5
 
-# Mechanical geometry (mm)
+# Original geometry (mm)
 TOOL_LENGTH = 285.5
 
 LEFT_TOF_OFFSET = 37.743
 RIGHT_TOF_OFFSET = 36.214
 
-# Set to 1.0 if TOFManager returns millimeters.
-# Set to 1000.0 if it returns meters.
+# NEW: tip corrections (mm)
+LEFT_TIP_CORRECTION = 15.6
+RIGHT_TIP_CORRECTION = 21.2
+
+# Effective lengths
+LEFT_TOOL_LENGTH = TOOL_LENGTH - LEFT_TIP_CORRECTION
+RIGHT_TOOL_LENGTH = TOOL_LENGTH - RIGHT_TIP_CORRECTION
+
 TOF_TO_MM = 1.0
 
-# Visualization
 SHAFT_WIDTH = 5
 TOF_LINE_WIDTH = 2
 AXIS_VECTOR_LENGTH = 35.0
 
 
 # ============================================================
-# FIXED POSITIONS (LEFT RCM COORDINATE SYSTEM)
+# FIXED POSITIONS RELATIVE TO LEFT RCM
 # ============================================================
 
 LEFT_RCM = np.array([0.000, 0.000, 0.000])
 RIGHT_RCM = np.array([-1.880, -93.263, -0.869])
-
 CAMERA_LENS = np.array([13.355, -45.835, 2.959])
 
 CALIBRATION_POINTS = {
@@ -102,8 +93,8 @@ CALIBRATION_POINTS = {
     "R4C6": (72.268, -75.541, -70.031),
     "R5C2": (87.268, -12.541, -70.031),
     "R5C3": (87.268, -32.541, -70.031),
-    "R6C4": (102.268, -50.541, -70.031),
-    "R6C6": (102.268, -75.541, -70.031),
+    "R6C4": (72.268 + 30, -50.541, -70.031),
+    "R6C6": (72.268 + 30, -75.541, -70.031),
     "R7C2": (112.268, -12.541, -70.031),
     "R7C3": (112.268, -32.541, -70.031),
     "R8C5": (117.268, -63.041, -70.031),
@@ -111,74 +102,103 @@ CALIBRATION_POINTS = {
 
 
 # ============================================================
-# QUATERNION AND GEOMETRY
+# QUATERNION AND TOOL GEOMETRY
 # ============================================================
 
-def quaternion_to_rotation(q):
-    """Convert tracker [w,x,y,z] quaternion into a SciPy rotation."""
+def as_rotation(q):
+    """Return sensor-to-world Rotation, using the existing quaternion convention."""
     q = np.asarray(q, dtype=float).flatten()
     if q.size != 4 or not np.all(np.isfinite(q)) or np.linalg.norm(q) < 1e-10:
-        raise ValueError("Invalid IMU quaternion")
+        raise ValueError("Invalid quaternion")
     q = q / np.linalg.norm(q)
     if QUATERNION_ORDER == "wxyz":
         q = [q[1], q[2], q[3], q[0]]
     elif QUATERNION_ORDER != "xyzw":
         raise ValueError("Invalid quaternion order")
-    rotation = Rotation.from_quat(q)
-    return rotation.inv() if INVERT_QUATERNION else rotation
+    rot = Rotation.from_quat(q)
+    return rot.inv() if INVERT_QUATERNION else rot
 
 
 def target_rotation(rcm, target):
-    """Minimum rotation mapping local +Z to RCM -> calibration target."""
+    """Minimum-angle rotation taking local +Z to RCM -> target."""
     direction = np.asarray(target, dtype=float) - np.asarray(rcm, dtype=float)
     direction /= np.linalg.norm(direction)
-    z = np.array([0.0, 0.0, 1.0])
-    dot = float(np.clip(np.dot(z, direction), -1.0, 1.0))
+    z = np.array([0., 0., 1.])
+    dot = np.clip(np.dot(z, direction), -1., 1.)
     if dot > 1.0 - 1e-12:
         return Rotation.identity()
     if dot < -1.0 + 1e-12:
-        return Rotation.from_rotvec(np.pi * np.array([1.0, 0.0, 0.0]))
+        return Rotation.from_rotvec(np.pi * np.array([1., 0., 0.]))
     axis = np.cross(z, direction)
     axis /= np.linalg.norm(axis)
     return Rotation.from_rotvec(np.arccos(dot) * axis)
 
 
-LEFT_TARGET_ROTATION = target_rotation(LEFT_RCM, CALIBRATION_POINTS["R1C1"])
-RIGHT_TARGET_ROTATION = target_rotation(RIGHT_RCM, CALIBRATION_POINTS["R1C7"])
+def calibrated_z_axis(raw_q, zero_rotation, reference_rotation):
+    """World-frame delta from Z press, applied to the target pose.
+
+    This is a candidate frame convention, not an independently verified
+    IMU-to-pegboard registration. Check physical axis motion on hardware.
+    """
+    raw_rotation = as_rotation(raw_q)
+    delta_world = raw_rotation * zero_rotation.inv()
+    calibrated = delta_world * reference_rotation
+    z_axis = calibrated.apply([0., 0., 1.])
+    return z_axis / np.linalg.norm(z_axis)
+
+
+def quaternion_to_z_axis(q):
+
+    q = np.asarray(q, dtype=float).flatten()
+
+    if q.size != 4:
+        raise ValueError("Quaternion must contain 4 elements")
+
+    if QUATERNION_ORDER == "wxyz":
+        q_scipy = [q[1], q[2], q[3], q[0]]
+    elif QUATERNION_ORDER == "xyzw":
+        q_scipy = q
+    else:
+        raise ValueError("Invalid quaternion order")
+
+    rotation = Rotation.from_quat(q_scipy)
+
+    if INVERT_QUATERNION:
+        rotation = rotation.inv()
+
+    z_axis = rotation.apply([0, 0, 1])
+
+    return z_axis / np.linalg.norm(z_axis)
 
 
 def calculate_tool_geometry(
     rcm,
     z_axis,
     tof_distance,
-    tof_offset
+    tof_offset,
+    tip_correction
 ):
     """
-    Geometry:
+    RCM -> ToF: -Z
+    ToF -> Wall: -Z
+    Wall -> Tip: +Z
 
-    RCM -> ToF: local -Z, fixed offset
-    ToF -> Wall: local -Z, measured distance
-    Wall -> Tip: local +Z, 285.5 mm
-
-    All positions returned in world coordinates.
+    Tip correction shortens wall-to-tip length.
     """
 
     rcm = np.asarray(rcm, dtype=float)
     z_axis = np.asarray(z_axis, dtype=float)
 
-    # ToF sensor position
-    tof_position = (
-        rcm - tof_offset * z_axis
-    )
+    tof_position = rcm - tof_offset * z_axis
 
-    # Handle wall position
     wall_position = (
         tof_position - tof_distance * z_axis
     )
 
-    # Tool tip position
+    effective_length = TOOL_LENGTH - tip_correction
+
     tip_position = (
-        wall_position + TOOL_LENGTH * z_axis
+        wall_position + effective_length * z_axis
     )
 
     return {
@@ -188,8 +208,9 @@ def calculate_tool_geometry(
         "tip": tip_position,
         "z_axis": z_axis,
         "distance": tof_distance,
+        "effective_length": effective_length,
         "tip_rcm_distance": (
-            TOOL_LENGTH - tof_offset - tof_distance
+            effective_length - tof_offset - tof_distance
         ),
     }
 
@@ -204,42 +225,38 @@ class VisualizeDualIMU(QWidget):
         super().__init__()
 
         self.setWindowTitle(
-            "Dual Tool Geometry - IMU + ToF"
+            "Dual Tool Geometry - Z-Calibrated IMU + ToF (v4.2)"
         )
 
         self.resize(1400, 950)
 
         layout = QVBoxLayout(self)
 
-        self.latest_sample = None
-        self.zero_left = None
-        self.zero_right = None
-        self.setFocusPolicy(Qt.StrongFocus)
-
-        # ----------------------------------------------------
-        # STATUS TEXT
-        # ----------------------------------------------------
-
         self.status = QLabel(
-            "Waiting for IMU and ToF data. Aim at R1C1 / R1C7, then press Z."
+            "Waiting for IMU and ToF data..."
         )
 
         self.status.setAlignment(Qt.AlignCenter)
-
         self.status.setStyleSheet(
             "font-size: 14px; padding: 8px;"
         )
 
         layout.addWidget(self.status)
 
-        self.zero_button = QPushButton("Zero orientations / start visualization (Z)")
+        self.zero_button = QPushButton("Zero at calibration spots (Z)")
         self.zero_button.clicked.connect(self.zero_now)
         layout.addWidget(self.zero_button)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setFocus()
 
-        # ----------------------------------------------------
-        # 3D VIEW
-        # ----------------------------------------------------
+        self.latest_sample = None
+        self.zero_rotations = None
+        self.reference_rotations = {
+            "left": target_rotation(LEFT_RCM, CALIBRATION_POINTS["R1C1"]),
+            "right": target_rotation(RIGHT_RCM, CALIBRATION_POINTS["R1C7"]),
+        }
 
+        # Shared 3D view
         self.view = gl.GLViewWidget()
         layout.addWidget(self.view)
 
@@ -252,42 +269,25 @@ class VisualizeDualIMU(QWidget):
 
         # Grid
         grid = gl.GLGridItem()
-
         grid.setSize(300, 300)
         grid.setSpacing(25, 25)
         grid.translate(50, -45, -90)
-
         self.view.addItem(grid)
 
-        # ----------------------------------------------------
-        # REFERENCE POINTS
-        # ----------------------------------------------------
-
+        # RCM and camera
         self.add_static_point(
-            LEFT_RCM,
-            (0, 1, 0, 1),
-            13,
-            "Left RCM"
+            LEFT_RCM, (0, 1, 0, 1), 13, "Left RCM"
         )
 
         self.add_static_point(
-            RIGHT_RCM,
-            (1, 0, 0, 1),
-            13,
-            "Right RCM"
+            RIGHT_RCM, (1, 0, 0, 1), 13, "Right RCM"
         )
 
         self.add_static_point(
-            CAMERA_LENS,
-            (1, 1, 0, 1),
-            12,
-            "Camera Lens"
+            CAMERA_LENS, (1, 1, 0, 1), 12, "Camera Lens"
         )
 
-        # ----------------------------------------------------
-        # CALIBRATION POINTS
-        # ----------------------------------------------------
-
+        # Calibration points
         for name, position in CALIBRATION_POINTS.items():
 
             point = np.array(position, dtype=float)
@@ -300,16 +300,10 @@ class VisualizeDualIMU(QWidget):
                 size = 8
 
             self.add_static_point(
-                point,
-                color,
-                size,
-                name
+                point, color, size, name
             )
 
-        # ----------------------------------------------------
-        # CREATE DYNAMIC TOOL VISUALIZATIONS
-        # ----------------------------------------------------
-
+        # Dynamic tools
         self.left_tool = self.create_tool(
             color=(0, 1, 0, 1)
         )
@@ -318,22 +312,13 @@ class VisualizeDualIMU(QWidget):
             color=(1, 0, 0, 1)
         )
 
-        # Fixed reference points remain visible; dynamic tools appear after Z.
-        for tool in (self.left_tool, self.right_tool):
-            for item in tool.values():
-                item.hide()
-
-        # ----------------------------------------------------
-        # SERIAL THREAD
-        # ----------------------------------------------------
-
+        # Serial thread
         self.data_thread = DualIMUData()
-
         self.data_thread.quaternion_data.connect(
             self.load_data
         )
-
         self.data_thread.start()
+        self.status.setText("Waiting for data. Point LEFT at R1C1 and RIGHT at R1C7, then press Z.")
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Z and not event.isAutoRepeat():
@@ -343,23 +328,25 @@ class VisualizeDualIMU(QWidget):
             super().keyPressEvent(event)
 
     def zero_now(self):
-        """Use the most recently received sample as the two IMU references."""
         if self.latest_sample is None:
             self.status.setText("No valid IMU/ToF sample yet; cannot zero.")
             return
+        stamp, left_q, left_distance, right_q, right_distance = self.latest_sample
+        age = time.monotonic() - stamp
+        if age > MAX_ZERO_SAMPLE_AGE_S:
+            self.status.setText(f"Sample stale ({age:.2f} s); zero cancelled.")
+            return
         try:
-            left_q, _, right_q, _ = self.latest_sample
-            self.zero_left = quaternion_to_rotation(left_q)
-            self.zero_right = quaternion_to_rotation(right_q)
-            for tool in (self.left_tool, self.right_tool):
-                for item in tool.values():
-                    item.show()
-            self.load_data(self.latest_sample)
+            left_zero = as_rotation(left_q)
+            right_zero = as_rotation(right_q)
         except (ValueError, TypeError) as exc:
-            self.status.setText(f"Zero failed: {exc}")
+            self.status.setText(f"Invalid zero sample: {exc}")
+            return
+        self.zero_rotations = {"left": left_zero, "right": right_zero}
+        self.update_calibrated_tools(left_q, left_distance, right_q, right_distance)
 
     # ========================================================
-    # STATIC POINTS
+    # STATIC POINT
     # ========================================================
 
     def add_static_point(
@@ -392,15 +379,15 @@ class VisualizeDualIMU(QWidget):
             self.view.addItem(text)
 
     # ========================================================
-    # CREATE DYNAMIC TOOL
+    # CREATE TOOL
     # ========================================================
 
     def create_tool(self, color):
 
-        zero_line = np.zeros((2, 3))
-        zero_point = np.zeros((1, 3))
+        # Hide dynamic geometry until Z is pressed.
+        zero_line = np.full((2, 3), np.nan)
+        zero_point = np.full((1, 3), np.nan)
 
-        # Full shaft: wall -> tip
         shaft = gl.GLLinePlotItem(
             pos=zero_line.copy(),
             color=color,
@@ -408,7 +395,6 @@ class VisualizeDualIMU(QWidget):
             antialias=True
         )
 
-        # ToF beam: sensor -> wall
         tof_beam = gl.GLLinePlotItem(
             pos=zero_line.copy(),
             color=(1, 1, 0, 1),
@@ -416,7 +402,6 @@ class VisualizeDualIMU(QWidget):
             antialias=True
         )
 
-        # +Z direction from RCM
         z_vector = gl.GLLinePlotItem(
             pos=zero_line.copy(),
             color=color,
@@ -424,7 +409,6 @@ class VisualizeDualIMU(QWidget):
             antialias=True
         )
 
-        # Tool tip
         tip_marker = gl.GLScatterPlotItem(
             pos=zero_point.copy(),
             color=(1, 1, 1, 1),
@@ -432,7 +416,6 @@ class VisualizeDualIMU(QWidget):
             pxMode=True
         )
 
-        # ToF sensor
         tof_marker = gl.GLScatterPlotItem(
             pos=zero_point.copy(),
             color=(1, 1, 0, 1),
@@ -440,7 +423,6 @@ class VisualizeDualIMU(QWidget):
             pxMode=True
         )
 
-        # Handle wall
         wall_marker = gl.GLScatterPlotItem(
             pos=zero_point.copy(),
             color=(1, 0.5, 0, 1),
@@ -448,7 +430,6 @@ class VisualizeDualIMU(QWidget):
             pxMode=True
         )
 
-        # Add to 3D view
         for item in [
             shaft,
             tof_beam,
@@ -469,7 +450,7 @@ class VisualizeDualIMU(QWidget):
         }
 
     # ========================================================
-    # UPDATE TOOL GEOMETRY
+    # UPDATE TOOL
     # ========================================================
 
     def update_tool(self, tool, geometry):
@@ -480,17 +461,14 @@ class VisualizeDualIMU(QWidget):
         tip = geometry["tip"]
         z_axis = geometry["z_axis"]
 
-        # Full physical shaft
         tool["shaft"].setData(
             pos=np.vstack([wall, tip])
         )
 
-        # ToF measurement beam
         tool["tof_beam"].setData(
             pos=np.vstack([tof, wall])
         )
 
-        # Local +Z direction
         tool["z_vector"].setData(
             pos=np.vstack([
                 rcm,
@@ -498,7 +476,6 @@ class VisualizeDualIMU(QWidget):
             ])
         )
 
-        # Markers
         tool["tip_marker"].setData(
             pos=tip.reshape(1, 3)
         )
@@ -512,64 +489,56 @@ class VisualizeDualIMU(QWidget):
         )
 
     # ========================================================
-    # LIVE DATA UPDATE
+    # LIVE UPDATE
     # ========================================================
 
     def load_data(self, data):
-        # Live-only: no CSV, TXT, or other measurement files are created.
-        self.latest_sample = data
-        if self.zero_left is None or self.zero_right is None:
-            self.status.setText(
-                "Receiving data. Aim LEFT at R1C1 and RIGHT at R1C7, then press Z."
-            )
-            return
-
-        left_q, left_distance, right_q, right_distance = data
         try:
+            left_q, left_distance, right_q, right_distance = data
             left_distance = float(left_distance) * TOF_TO_MM
             right_distance = float(right_distance) * TOF_TO_MM
-            if not np.all(np.isfinite([left_distance, right_distance])):
+            if (not np.isfinite([left_distance, right_distance]).all()
+                    or left_distance < 0 or right_distance < 0):
                 return
-            if left_distance < 0 or right_distance < 0:
-                return
-
-            # At Z: relative = identity and calibrated = target rotation.
-            # Later: calibrated = target * inverse(zero_raw) * current_raw.
-            left_relative = self.zero_left.inv() * quaternion_to_rotation(left_q)
-            right_relative = self.zero_right.inv() * quaternion_to_rotation(right_q)
-            left_calibrated = LEFT_TARGET_ROTATION * left_relative
-            right_calibrated = RIGHT_TARGET_ROTATION * right_relative
-            left_z = left_calibrated.apply([0.0, 0.0, 1.0])
-            right_z = right_calibrated.apply([0.0, 0.0, 1.0])
-
-            left_geometry = calculate_tool_geometry(
-                rcm=LEFT_RCM,
-                z_axis=left_z,
-                tof_distance=left_distance,
-                tof_offset=LEFT_TOF_OFFSET,
+            # Validate rotations before accepting the sample for calibration.
+            as_rotation(left_q)
+            as_rotation(right_q)
+            self.latest_sample = (
+                time.monotonic(), np.asarray(left_q, dtype=float).copy(),
+                left_distance, np.asarray(right_q, dtype=float).copy(), right_distance
             )
-            right_geometry = calculate_tool_geometry(
-                rcm=RIGHT_RCM,
-                z_axis=right_z,
-                tof_distance=right_distance,
-                tof_offset=RIGHT_TOF_OFFSET,
-            )
-            self.update_tool(self.left_tool, left_geometry)
-            self.update_tool(self.right_tool, right_geometry)
-            self.status.setText(
-                f"ZEROED | LEFT ToF: {left_distance:.1f} mm"
-                f" | Tip-RCM axial: {left_geometry['tip_rcm_distance']:.1f} mm"
-                f" | Tip: {np.round(left_geometry['tip'], 1)}"
-                "\n"
-                f"ZEROED | RIGHT ToF: {right_distance:.1f} mm"
-                f" | Tip-RCM axial: {right_geometry['tip_rcm_distance']:.1f} mm"
-                f" | Tip: {np.round(right_geometry['tip'], 1)}"
-            )
+            if self.zero_rotations is None:
+                return  # Fixed reference points remain visible; tools wait for Z.
+            self.update_calibrated_tools(left_q, left_distance, right_q, right_distance)
         except (ValueError, TypeError) as exc:
-            print(f"Visualization update error: {exc}")
+            print(f"Visualization error: {exc}")
+
+    def update_calibrated_tools(self, left_q, left_distance, right_q, right_distance):
+        left_z = calibrated_z_axis(
+            left_q, self.zero_rotations["left"], self.reference_rotations["left"]
+        )
+        right_z = calibrated_z_axis(
+            right_q, self.zero_rotations["right"], self.reference_rotations["right"]
+        )
+        left_geometry = calculate_tool_geometry(
+            rcm=LEFT_RCM, z_axis=left_z, tof_distance=left_distance,
+            tof_offset=LEFT_TOF_OFFSET, tip_correction=LEFT_TIP_CORRECTION
+        )
+        right_geometry = calculate_tool_geometry(
+            rcm=RIGHT_RCM, z_axis=right_z, tof_distance=right_distance,
+            tof_offset=RIGHT_TOF_OFFSET, tip_correction=RIGHT_TIP_CORRECTION
+        )
+        self.update_tool(self.left_tool, left_geometry)
+        self.update_tool(self.right_tool, right_geometry)
+        self.status.setText(
+            f"ZEROED | LEFT: ToF {left_distance:.1f} mm | length {LEFT_TOOL_LENGTH:.1f} mm "
+            f"| tip {np.round(left_geometry['tip'], 1)}\n"
+            f"ZEROED | RIGHT: ToF {right_distance:.1f} mm | length {RIGHT_TOOL_LENGTH:.1f} mm "
+            f"| tip {np.round(right_geometry['tip'], 1)}"
+        )
 
     # ========================================================
-    # CLEAN SHUTDOWN
+    # SHUTDOWN
     # ========================================================
 
     def closeEvent(self, event):
@@ -598,7 +567,6 @@ class DualIMUData(QThread):
     def run(self):
 
         try:
-
             ser = serial.Serial(
                 SERIAL_PORT,
                 BAUD_RATE,
@@ -606,10 +574,7 @@ class DualIMUData(QThread):
             )
 
         except Exception as e:
-
-            print(
-                f"Failed to connect to {SERIAL_PORT}: {e}"
-            )
+            print(f"Failed to connect to {SERIAL_PORT}: {e}")
             return
 
         left_tracker = IMUQuaternionTracker("left", use_offset=False)
@@ -620,11 +585,9 @@ class DualIMUData(QThread):
         iter_counter = 0
 
         try:
-
             while self.running:
 
                 try:
-
                     raw_line = ser.readline().decode(
                         "utf-8"
                     ).strip()
@@ -638,16 +601,13 @@ class DualIMUData(QThread):
                         continue
 
                 except Exception as e:
-
                     print(f"Serial error: {e}")
                     continue
 
                 iter_counter += 1
 
                 if iter_counter == COUNT_TILL_SETTLED:
-
                     print("Gain updated")
-
                     left_tracker.set_gain(0.2)
                     right_tracker.set_gain(0.2)
 
@@ -663,7 +623,6 @@ class DualIMUData(QThread):
 
                 tof_values = line[3:5]
 
-                # Left quaternion
                 left_q = left_tracker.get_quaternion(
                     left_imu_values
                 )
@@ -671,7 +630,6 @@ class DualIMUData(QThread):
                 if left_q is None:
                     continue
 
-                # Right quaternion
                 right_q = right_tracker.get_quaternion(
                     right_imu_values
                 )
@@ -679,9 +637,7 @@ class DualIMUData(QThread):
                 if right_q is None:
                     continue
 
-                # ToF measurements
                 try:
-
                     distances = list(
                         tof_manager.get_distances(
                             tof_values
@@ -692,7 +648,6 @@ class DualIMUData(QThread):
                         continue
 
                 except Exception as e:
-
                     print(f"ToF error: {e}")
                     continue
 
@@ -704,7 +659,6 @@ class DualIMUData(QThread):
                 ])
 
         finally:
-
             ser.close()
             print("Serial connection closed")
 
