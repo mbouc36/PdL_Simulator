@@ -1,13 +1,16 @@
 
 """
 Author: Joya
-Version: 4.2 — Z-calibrated visualization
+Version: 4.3 — Z-calibrated visualization with motion-direction correction
 
 Description:
 Live dual-tool 3D visualization using IMU quaternions
 and ToF distance measurements.
 
-Version 4.1:
+Version 4.3:
+- Inverse relative rotation by default to test reversed movement
+- Press I to toggle relative-rotation inversion
+- Press M to switch world/local relative-rotation composition
 - Left tool tip shortened by 15.6 mm
 - Right tool tip shortened by 21.2 mm
 - Corrections applied along each tool's local -Z axis
@@ -134,15 +137,26 @@ def target_rotation(rcm, target):
     return Rotation.from_rotvec(np.arccos(dot) * axis)
 
 
-def calibrated_z_axis(raw_q, zero_rotation, reference_rotation):
-    """World-frame delta from Z press, applied to the target pose.
+def calibrated_z_axis(raw_q, zero_rotation, reference_rotation, inverse_delta=True, frame="world"):
+    """Map the Z-press orientation to the known target and apply live changes.
 
-    This is a candidate frame convention, not an independently verified
-    IMU-to-pegboard registration. Check physical axis motion on hardware.
+    The inverse-delta default tests the observed opposite movement. It does
+    not establish the full IMU-to-pegboard frame registration. Toggle with I.
+    Frame mode can be changed with M to test world versus local composition.
     """
     raw_rotation = as_rotation(raw_q)
-    delta_world = raw_rotation * zero_rotation.inv()
-    calibrated = delta_world * reference_rotation
+    if frame == "world":
+        delta = raw_rotation * zero_rotation.inv()
+        if inverse_delta:
+            delta = delta.inv()
+        calibrated = delta * reference_rotation
+    elif frame == "local":
+        delta = zero_rotation.inv() * raw_rotation
+        if inverse_delta:
+            delta = delta.inv()
+        calibrated = reference_rotation * delta
+    else:
+        raise ValueError("Unknown rotation frame")
     z_axis = calibrated.apply([0., 0., 1.])
     return z_axis / np.linalg.norm(z_axis)
 
@@ -225,7 +239,7 @@ class VisualizeDualIMU(QWidget):
         super().__init__()
 
         self.setWindowTitle(
-            "Dual Tool Geometry - Z-Calibrated IMU + ToF (v4.2)"
+            "Dual Tool Geometry - Z-Calibrated IMU + ToF (v4.3)"
         )
 
         self.resize(1400, 950)
@@ -246,11 +260,16 @@ class VisualizeDualIMU(QWidget):
         self.zero_button = QPushButton("Zero at calibration spots (Z)")
         self.zero_button.clicked.connect(self.zero_now)
         layout.addWidget(self.zero_button)
+        self.mode_label = QLabel("Motion correction: inverse delta ON | frame: world | I: invert | M: frame")
+        self.mode_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.mode_label)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setFocus()
 
         self.latest_sample = None
         self.zero_rotations = None
+        self.inverse_delta = True
+        self.rotation_frame = "world"
         self.reference_rotations = {
             "left": target_rotation(LEFT_RCM, CALIBRATION_POINTS["R1C1"]),
             "right": target_rotation(RIGHT_RCM, CALIBRATION_POINTS["R1C7"]),
@@ -318,14 +337,35 @@ class VisualizeDualIMU(QWidget):
             self.load_data
         )
         self.data_thread.start()
-        self.status.setText("Waiting for data. Point LEFT at R1C1 and RIGHT at R1C7, then press Z.")
+        self.status.setText("Point LEFT at R1C1 and RIGHT at R1C7, press Z. Press I to reverse motion, M to change frame.")
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Z and not event.isAutoRepeat():
             self.zero_now()
             event.accept()
+        elif event.key() == Qt.Key_I and not event.isAutoRepeat():
+            self.inverse_delta = not self.inverse_delta
+            self.refresh_mode()
+            self.refresh_latest()
+            event.accept()
+        elif event.key() == Qt.Key_M and not event.isAutoRepeat():
+            self.rotation_frame = "local" if self.rotation_frame == "world" else "world"
+            self.refresh_mode()
+            self.refresh_latest()
+            event.accept()
         else:
             super().keyPressEvent(event)
+
+    def refresh_mode(self):
+        self.mode_label.setText(
+            f"Motion correction: inverse delta {'ON' if self.inverse_delta else 'OFF'} "
+            f"| frame: {self.rotation_frame} | I: invert | M: frame"
+        )
+
+    def refresh_latest(self):
+        if self.zero_rotations is not None and self.latest_sample is not None:
+            _, lq, ld, rq, rd = self.latest_sample
+            self.update_calibrated_tools(lq, ld, rq, rd)
 
     def zero_now(self):
         if self.latest_sample is None:
@@ -515,10 +555,12 @@ class VisualizeDualIMU(QWidget):
 
     def update_calibrated_tools(self, left_q, left_distance, right_q, right_distance):
         left_z = calibrated_z_axis(
-            left_q, self.zero_rotations["left"], self.reference_rotations["left"]
+            left_q, self.zero_rotations["left"], self.reference_rotations["left"],
+            self.inverse_delta, self.rotation_frame
         )
         right_z = calibrated_z_axis(
-            right_q, self.zero_rotations["right"], self.reference_rotations["right"]
+            right_q, self.zero_rotations["right"], self.reference_rotations["right"],
+            self.inverse_delta, self.rotation_frame
         )
         left_geometry = calculate_tool_geometry(
             rcm=LEFT_RCM, z_axis=left_z, tof_distance=left_distance,
@@ -531,7 +573,8 @@ class VisualizeDualIMU(QWidget):
         self.update_tool(self.left_tool, left_geometry)
         self.update_tool(self.right_tool, right_geometry)
         self.status.setText(
-            f"ZEROED | LEFT: ToF {left_distance:.1f} mm | length {LEFT_TOOL_LENGTH:.1f} mm "
+            f"ZEROED [{self.rotation_frame}, inverse={'ON' if self.inverse_delta else 'OFF'}] "
+            f"| LEFT: ToF {left_distance:.1f} mm | length {LEFT_TOOL_LENGTH:.1f} mm "
             f"| tip {np.round(left_geometry['tip'], 1)}\n"
             f"ZEROED | RIGHT: ToF {right_distance:.1f} mm | length {RIGHT_TOOL_LENGTH:.1f} mm "
             f"| tip {np.round(right_geometry['tip'], 1)}"
