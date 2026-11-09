@@ -22,6 +22,14 @@ import time
 import warnings
 import os
 
+# Logger is in diagnostics/; project root is one directory above.
+sys.path.append(
+    os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        ".."
+    )
+)
+
 import numpy as np
 from scipy.spatial.transform import Rotation
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
@@ -71,11 +79,6 @@ class DualIMUData(QThread):
     acquisition_error = pyqtSignal(str)
 
     def run(self):
-        # These are the only project-specific imports needed for real hardware.
-        project_root = Path(__file__).resolve().parent
-        # Change PROJECT_ROOT if this logger is not in your project root.
-        if str(project_root) not in sys.path:
-            sys.path.insert(0, str(project_root))
         try:
             import serial
             from update_config import load_config
@@ -89,11 +92,11 @@ class DualIMUData(QThread):
             return
 
         try:
-            # No fixed heading offset: the logger applies its own Z zeroing.
+            # Disable the tracker's fixed heading offset; Z applies calibration.
             left_tracker = IMUQuaternionTracker('left', use_offset=False)
             right_tracker = IMUQuaternionTracker('right', use_offset=False)
             tof_manager = TOFManager()
-            valid_count = 0
+            iter_counter = 0
 
             while not self.isInterruptionRequested():
                 try:
@@ -117,8 +120,8 @@ class DualIMUData(QThread):
                     if len(distances) != 2:
                         continue
                     self.quaternion_data.emit([left_q, distances[0], right_q, distances[1]])
-                    valid_count += 1
-                    if valid_count == 400:
+                    iter_counter += 1
+                    if iter_counter == 400:
                         left_tracker.set_gain(0.2)
                         right_tracker.set_gain(0.2)
                 except (ValueError, TypeError, UnicodeDecodeError, IndexError) as exc:
