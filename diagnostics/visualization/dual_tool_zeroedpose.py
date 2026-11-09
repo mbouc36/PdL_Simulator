@@ -1,13 +1,14 @@
 
 """
 Author: Joya
-Version: 4.3 — Z-calibrated visualization with motion-direction correction
+Version: 4.4 — compact live data + 3D plot
 
 Description:
 Live dual-tool 3D visualization using IMU quaternions
 and ToF distance measurements.
 
-Version 4.3:
+Version 4.4:
+- GUI contains only live data/status and the 3D plot (no control panel)
 - Inverse relative rotation by default to test reversed movement
 - Press I to toggle relative-rotation inversion
 - Press M to switch world/local relative-rotation composition
@@ -26,7 +27,7 @@ import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 
 from scipy.spatial.transform import Rotation
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QPushButton
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 import time
 
@@ -239,7 +240,7 @@ class VisualizeDualIMU(QWidget):
         super().__init__()
 
         self.setWindowTitle(
-            "Dual Tool Geometry - Z-Calibrated IMU + ToF (v4.3)"
+            "Dual Tool Geometry - Z-Calibrated IMU + ToF (v4.4)"
         )
 
         self.resize(1400, 950)
@@ -257,12 +258,7 @@ class VisualizeDualIMU(QWidget):
 
         layout.addWidget(self.status)
 
-        self.zero_button = QPushButton("Zero at calibration spots (Z)")
-        self.zero_button.clicked.connect(self.zero_now)
-        layout.addWidget(self.zero_button)
-        self.mode_label = QLabel("Motion correction: inverse delta ON | frame: world | I: invert | M: frame")
-        self.mode_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.mode_label)
+        # Keyboard shortcuts remain active; no separate controls panel.
         self.setFocusPolicy(Qt.StrongFocus)
         self.setFocus()
 
@@ -337,7 +333,7 @@ class VisualizeDualIMU(QWidget):
             self.load_data
         )
         self.data_thread.start()
-        self.status.setText("Point LEFT at R1C1 and RIGHT at R1C7, press Z. Press I to reverse motion, M to change frame.")
+        self.status.setText("LIVE | Point LEFT at R1C1 and RIGHT at R1C7, then press Z.  I: invert motion  |  M: frame")
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Z and not event.isAutoRepeat():
@@ -345,22 +341,14 @@ class VisualizeDualIMU(QWidget):
             event.accept()
         elif event.key() == Qt.Key_I and not event.isAutoRepeat():
             self.inverse_delta = not self.inverse_delta
-            self.refresh_mode()
             self.refresh_latest()
             event.accept()
         elif event.key() == Qt.Key_M and not event.isAutoRepeat():
             self.rotation_frame = "local" if self.rotation_frame == "world" else "world"
-            self.refresh_mode()
             self.refresh_latest()
             event.accept()
         else:
             super().keyPressEvent(event)
-
-    def refresh_mode(self):
-        self.mode_label.setText(
-            f"Motion correction: inverse delta {'ON' if self.inverse_delta else 'OFF'} "
-            f"| frame: {self.rotation_frame} | I: invert | M: frame"
-        )
 
     def refresh_latest(self):
         if self.zero_rotations is not None and self.latest_sample is not None:
@@ -548,6 +536,11 @@ class VisualizeDualIMU(QWidget):
                 left_distance, np.asarray(right_q, dtype=float).copy(), right_distance
             )
             if self.zero_rotations is None:
+                self.status.setText(
+                    f"LIVE (not zeroed) | LEFT ToF: {left_distance:.1f} mm  |  "
+                    f"RIGHT ToF: {right_distance:.1f} mm\n"
+                    "Point LEFT at R1C1 and RIGHT at R1C7; press Z to start plotting."
+                )
                 return  # Fixed reference points remain visible; tools wait for Z.
             self.update_calibrated_tools(left_q, left_distance, right_q, right_distance)
         except (ValueError, TypeError) as exc:
@@ -573,7 +566,7 @@ class VisualizeDualIMU(QWidget):
         self.update_tool(self.left_tool, left_geometry)
         self.update_tool(self.right_tool, right_geometry)
         self.status.setText(
-            f"ZEROED [{self.rotation_frame}, inverse={'ON' if self.inverse_delta else 'OFF'}] "
+            f"LIVE / ZEROED [{self.rotation_frame}, inverse={'ON' if self.inverse_delta else 'OFF'}] "
             f"| LEFT: ToF {left_distance:.1f} mm | length {LEFT_TOOL_LENGTH:.1f} mm "
             f"| tip {np.round(left_geometry['tip'], 1)}\n"
             f"ZEROED | RIGHT: ToF {right_distance:.1f} mm | length {RIGHT_TOOL_LENGTH:.1f} mm "
