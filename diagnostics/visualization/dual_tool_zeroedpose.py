@@ -1,7 +1,7 @@
 
 """
 Author: Joya
-Version: 4.2a — Z-calibrated visualization with IMU X/Y axes
+Version: 4.2b — local-frame Z calibration with IMU X/Y axes
 
 Description:
 Live dual-tool 3D visualization using IMU quaternions
@@ -137,14 +137,15 @@ def target_rotation(rcm, target):
 
 
 def calibrated_rotation(raw_q, zero_rotation, reference_rotation):
-    """World-frame delta from Z press, applied to the target pose.
+    """Apply local-frame IMU motion after Z calibration.
 
-    This is a candidate frame convention, not an independently verified
-    IMU-to-pegboard registration. Check physical axis motion on hardware.
+    Assumes the IMU local +Z axis is aligned with the tool shaft.
+    A pure local-Z roll therefore leaves the tool pointing axis unchanged.
+    The initial X/Y roll reference uses the minimum-angle target rotation.
     """
     raw_rotation = as_rotation(raw_q)
-    delta_world = raw_rotation * zero_rotation.inv()
-    calibrated = delta_world * reference_rotation
+    delta_local = zero_rotation.inv() * raw_rotation
+    calibrated = reference_rotation * delta_local
     return calibrated
 
 
@@ -226,7 +227,7 @@ class VisualizeDualIMU(QWidget):
         super().__init__()
 
         self.setWindowTitle(
-            "Dual Tool Geometry - Z-Calibrated IMU + ToF (v4.2a)"
+            "Dual Tool Geometry - Z-Calibrated IMU + ToF (v4.2b local-frame)"
         )
 
         self.resize(1400, 950)
