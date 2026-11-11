@@ -1,7 +1,7 @@
 
 """
 Author: Joya
-Version: 4.2b — local-frame Z calibration with IMU X/Y axes
+Version: 4.2d — full-pose calibration (IMU X up, Y right, Z shaft)
 
 Description:
 Live dual-tool 3D visualization using IMU quaternions
@@ -10,7 +10,7 @@ and ToF distance measurements.
 Changes from v4.2:
 - Restores full 285.5 mm wall-to-tip length on both tools
 - Adds short local X and Y orientation axes at a configurable IMU location
-- Press Z to align tool directions with R1C1 and R1C7
+- Press Z to set full tool pose: +X up, +Y right, +Z toward R1C1/R1C7
 - No data is saved
 """
 
@@ -122,18 +122,34 @@ def as_rotation(q):
 
 
 def target_rotation(rcm, target):
-    """Minimum-angle rotation taking local +Z to RCM -> target."""
-    direction = np.asarray(target, dtype=float) - np.asarray(rcm, dtype=float)
-    direction /= np.linalg.norm(direction)
-    z = np.array([0., 0., 1.])
-    dot = np.clip(np.dot(z, direction), -1., 1.)
-    if dot > 1.0 - 1e-12:
-        return Rotation.identity()
-    if dot < -1.0 + 1e-12:
-        return Rotation.from_rotvec(np.pi * np.array([1., 0., 0.]))
-    axis = np.cross(z, direction)
-    axis /= np.linalg.norm(axis)
-    return Rotation.from_rotvec(np.arccos(dot) * axis)
+    """Full calibration orientation in pegboard coordinates.
+
+    +Z: RCM -> target peg, matching the physical tool shaft.
+    +X: as upward as possible (projection of world +Z).
+    +Y: cross(+Z, +X), yielding a right-handed frame.
+
+    For these target directions, +Y points approximately toward world -Y,
+    the direction from the left RCM toward the right RCM.
+    """
+    z_axis = np.asarray(target, dtype=float) - np.asarray(rcm, dtype=float)
+    z_norm = np.linalg.norm(z_axis)
+    if z_norm < 1e-10:
+        raise ValueError("RCM and target must be distinct")
+    z_axis /= z_norm
+
+    world_up = np.array([0.0, 0.0, 1.0])
+    x_axis = world_up - np.dot(world_up, z_axis) * z_axis
+    if np.linalg.norm(x_axis) < 1e-8:
+        # Fallback only if the tool shaft is parallel to world up.
+        alternative = np.array([1.0, 0.0, 0.0])
+        x_axis = alternative - np.dot(alternative, z_axis) * z_axis
+    x_axis /= np.linalg.norm(x_axis)
+    y_axis = np.cross(z_axis, x_axis)
+    y_axis /= np.linalg.norm(y_axis)
+    x_axis = np.cross(y_axis, z_axis)  # enforce orthonormality
+
+    basis = np.column_stack((x_axis, y_axis, z_axis))
+    return Rotation.from_matrix(basis)
 
 
 def calibrated_rotation(raw_q, zero_rotation, reference_rotation):
@@ -141,7 +157,7 @@ def calibrated_rotation(raw_q, zero_rotation, reference_rotation):
 
     Assumes the IMU local +Z axis is aligned with the tool shaft.
     A pure local-Z roll therefore leaves the tool pointing axis unchanged.
-    The initial X/Y roll reference uses the minimum-angle target rotation.
+    The full starting pose is +X up, +Y right, +Z toward target.
     """
     raw_rotation = as_rotation(raw_q)
     delta_local = zero_rotation.inv() * raw_rotation
@@ -227,7 +243,7 @@ class VisualizeDualIMU(QWidget):
         super().__init__()
 
         self.setWindowTitle(
-            "Dual Tool Geometry - Z-Calibrated IMU + ToF (v4.2b local-frame)"
+            "Dual Tool Geometry - Full-Pose IMU Calibration (v4.2d)"
         )
 
         self.resize(1400, 950)
@@ -320,7 +336,7 @@ class VisualizeDualIMU(QWidget):
             self.load_data
         )
         self.data_thread.start()
-        self.status.setText("Waiting for data. Point LEFT at R1C1 and RIGHT at R1C7, then press Z. X=red, Y=blue.")
+        self.status.setText("Point LEFT at R1C1 and RIGHT at R1C7, orient IMU +X UP and +Y RIGHT, then press Z.")
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Z and not event.isAutoRepeat():
