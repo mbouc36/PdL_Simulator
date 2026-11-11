@@ -1,20 +1,15 @@
 
 """
 Author: Joya
-Version: 4.4 — compact live data + 3D plot
+Version: 4.2a — Z-calibrated visualization with IMU X/Y axes
 
 Description:
 Live dual-tool 3D visualization using IMU quaternions
 and ToF distance measurements.
 
-Version 4.4:
-- GUI contains only live data/status and the 3D plot (no control panel)
-- Inverse relative rotation by default to test reversed movement
-- Press I to toggle relative-rotation inversion
-- Press M to switch world/local relative-rotation composition
-- Left tool tip shortened by 15.6 mm
-- Right tool tip shortened by 21.2 mm
-- Corrections applied along each tool's local -Z axis
+Changes from v4.2:
+- Restores full 285.5 mm wall-to-tip length on both tools
+- Adds short local X and Y orientation axes at a configurable IMU location
 - Press Z to align tool directions with R1C1 and R1C7
 - No data is saved
 """
@@ -27,7 +22,7 @@ import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 
 from scipy.spatial.transform import Rotation
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QPushButton
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 import time
 
@@ -64,13 +59,16 @@ TOOL_LENGTH = 285.5
 LEFT_TOF_OFFSET = 37.743
 RIGHT_TOF_OFFSET = 36.214
 
-# NEW: tip corrections (mm)
-LEFT_TIP_CORRECTION = 15.6
-RIGHT_TIP_CORRECTION = 21.2
+# No tip shortening: full wall-to-tip length for both tools.
+LEFT_TOOL_LENGTH = TOOL_LENGTH
+RIGHT_TOOL_LENGTH = TOOL_LENGTH
 
-# Effective lengths
-LEFT_TOOL_LENGTH = TOOL_LENGTH - LEFT_TIP_CORRECTION
-RIGHT_TOOL_LENGTH = TOOL_LENGTH - RIGHT_TIP_CORRECTION
+# Exact IMU mounting positions were not provided. By default the short
+# X/Y axes originate at the ToF sensor marker as a visual proxy.
+# Adjust these axial offsets (mm, positive toward the tip) if known.
+LEFT_IMU_FROM_TOF_MM = 0.0
+RIGHT_IMU_FROM_TOF_MM = 0.0
+IMU_AXIS_LENGTH_MM = 22.0
 
 TOF_TO_MM = 1.0
 
@@ -138,28 +136,16 @@ def target_rotation(rcm, target):
     return Rotation.from_rotvec(np.arccos(dot) * axis)
 
 
-def calibrated_z_axis(raw_q, zero_rotation, reference_rotation, inverse_delta=True, frame="world"):
-    """Map the Z-press orientation to the known target and apply live changes.
+def calibrated_rotation(raw_q, zero_rotation, reference_rotation):
+    """World-frame delta from Z press, applied to the target pose.
 
-    The inverse-delta default tests the observed opposite movement. It does
-    not establish the full IMU-to-pegboard frame registration. Toggle with I.
-    Frame mode can be changed with M to test world versus local composition.
+    This is a candidate frame convention, not an independently verified
+    IMU-to-pegboard registration. Check physical axis motion on hardware.
     """
     raw_rotation = as_rotation(raw_q)
-    if frame == "world":
-        delta = raw_rotation * zero_rotation.inv()
-        if inverse_delta:
-            delta = delta.inv()
-        calibrated = delta * reference_rotation
-    elif frame == "local":
-        delta = zero_rotation.inv() * raw_rotation
-        if inverse_delta:
-            delta = delta.inv()
-        calibrated = reference_rotation * delta
-    else:
-        raise ValueError("Unknown rotation frame")
-    z_axis = calibrated.apply([0., 0., 1.])
-    return z_axis / np.linalg.norm(z_axis)
+    delta_world = raw_rotation * zero_rotation.inv()
+    calibrated = delta_world * reference_rotation
+    return calibrated
 
 
 def quaternion_to_z_axis(q):
@@ -191,14 +177,14 @@ def calculate_tool_geometry(
     z_axis,
     tof_distance,
     tof_offset,
-    tip_correction
+    imu_from_tof_mm=0.0
 ):
     """
     RCM -> ToF: -Z
     ToF -> Wall: -Z
     Wall -> Tip: +Z
 
-    Tip correction shortens wall-to-tip length.
+    The full original wall-to-tip length is used.
     """
 
     rcm = np.asarray(rcm, dtype=float)
@@ -210,11 +196,10 @@ def calculate_tool_geometry(
         tof_position - tof_distance * z_axis
     )
 
-    effective_length = TOOL_LENGTH - tip_correction
-
     tip_position = (
-        wall_position + effective_length * z_axis
+        wall_position + TOOL_LENGTH * z_axis
     )
+    imu_position = tof_position + imu_from_tof_mm * z_axis
 
     return {
         "rcm": rcm,
@@ -223,9 +208,10 @@ def calculate_tool_geometry(
         "tip": tip_position,
         "z_axis": z_axis,
         "distance": tof_distance,
-        "effective_length": effective_length,
+        "effective_length": TOOL_LENGTH,
+        "imu": imu_position,
         "tip_rcm_distance": (
-            effective_length - tof_offset - tof_distance
+            TOOL_LENGTH - tof_offset - tof_distance
         ),
     }
 
@@ -240,7 +226,7 @@ class VisualizeDualIMU(QWidget):
         super().__init__()
 
         self.setWindowTitle(
-            "Dual Tool Geometry - Z-Calibrated IMU + ToF (v4.4)"
+            "Dual Tool Geometry - Z-Calibrated IMU + ToF (v4.2a)"
         )
 
         self.resize(1400, 950)
@@ -258,14 +244,14 @@ class VisualizeDualIMU(QWidget):
 
         layout.addWidget(self.status)
 
-        # Keyboard shortcuts remain active; no separate controls panel.
+        self.zero_button = QPushButton("Zero at calibration spots (Z)")
+        self.zero_button.clicked.connect(self.zero_now)
+        layout.addWidget(self.zero_button)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setFocus()
 
         self.latest_sample = None
         self.zero_rotations = None
-        self.inverse_delta = True
-        self.rotation_frame = "world"
         self.reference_rotations = {
             "left": target_rotation(LEFT_RCM, CALIBRATION_POINTS["R1C1"]),
             "right": target_rotation(RIGHT_RCM, CALIBRATION_POINTS["R1C7"]),
@@ -333,27 +319,14 @@ class VisualizeDualIMU(QWidget):
             self.load_data
         )
         self.data_thread.start()
-        self.status.setText("LIVE | Point LEFT at R1C1 and RIGHT at R1C7, then press Z.  I: invert motion  |  M: frame")
+        self.status.setText("Waiting for data. Point LEFT at R1C1 and RIGHT at R1C7, then press Z. X=red, Y=blue.")
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Z and not event.isAutoRepeat():
             self.zero_now()
             event.accept()
-        elif event.key() == Qt.Key_I and not event.isAutoRepeat():
-            self.inverse_delta = not self.inverse_delta
-            self.refresh_latest()
-            event.accept()
-        elif event.key() == Qt.Key_M and not event.isAutoRepeat():
-            self.rotation_frame = "local" if self.rotation_frame == "world" else "world"
-            self.refresh_latest()
-            event.accept()
         else:
             super().keyPressEvent(event)
-
-    def refresh_latest(self):
-        if self.zero_rotations is not None and self.latest_sample is not None:
-            _, lq, ld, rq, rd = self.latest_sample
-            self.update_calibrated_tools(lq, ld, rq, rd)
 
     def zero_now(self):
         if self.latest_sample is None:
@@ -430,6 +403,16 @@ class VisualizeDualIMU(QWidget):
             antialias=True
         )
 
+        # IMU's calibrated local X and Y axes (red and blue).
+        imu_x_axis = gl.GLLinePlotItem(
+            pos=zero_line.copy(), color=(1, 0.2, 0.2, 1),
+            width=3, antialias=True
+        )
+        imu_y_axis = gl.GLLinePlotItem(
+            pos=zero_line.copy(), color=(0.2, 0.5, 1, 1),
+            width=3, antialias=True
+        )
+
         z_vector = gl.GLLinePlotItem(
             pos=zero_line.copy(),
             color=color,
@@ -462,6 +445,8 @@ class VisualizeDualIMU(QWidget):
             shaft,
             tof_beam,
             z_vector,
+            imu_x_axis,
+            imu_y_axis,
             tip_marker,
             tof_marker,
             wall_marker
@@ -472,6 +457,8 @@ class VisualizeDualIMU(QWidget):
             "shaft": shaft,
             "tof_beam": tof_beam,
             "z_vector": z_vector,
+            "imu_x_axis": imu_x_axis,
+            "imu_y_axis": imu_y_axis,
             "tip_marker": tip_marker,
             "tof_marker": tof_marker,
             "wall_marker": wall_marker,
@@ -481,13 +468,22 @@ class VisualizeDualIMU(QWidget):
     # UPDATE TOOL
     # ========================================================
 
-    def update_tool(self, tool, geometry):
+    def update_tool(self, tool, geometry, calibrated_rotation):
 
         rcm = geometry["rcm"]
         tof = geometry["tof"]
         wall = geometry["wall"]
         tip = geometry["tip"]
         z_axis = geometry["z_axis"]
+        imu_position = geometry["imu"]
+        x_axis = calibrated_rotation.apply([1.0, 0.0, 0.0])
+        y_axis = calibrated_rotation.apply([0.0, 1.0, 0.0])
+        tool["imu_x_axis"].setData(
+            pos=np.vstack([imu_position, imu_position + IMU_AXIS_LENGTH_MM * x_axis])
+        )
+        tool["imu_y_axis"].setData(
+            pos=np.vstack([imu_position, imu_position + IMU_AXIS_LENGTH_MM * y_axis])
+        )
 
         tool["shaft"].setData(
             pos=np.vstack([wall, tip])
@@ -536,40 +532,34 @@ class VisualizeDualIMU(QWidget):
                 left_distance, np.asarray(right_q, dtype=float).copy(), right_distance
             )
             if self.zero_rotations is None:
-                self.status.setText(
-                    f"LIVE (not zeroed) | LEFT ToF: {left_distance:.1f} mm  |  "
-                    f"RIGHT ToF: {right_distance:.1f} mm\n"
-                    "Point LEFT at R1C1 and RIGHT at R1C7; press Z to start plotting."
-                )
                 return  # Fixed reference points remain visible; tools wait for Z.
             self.update_calibrated_tools(left_q, left_distance, right_q, right_distance)
         except (ValueError, TypeError) as exc:
             print(f"Visualization error: {exc}")
 
     def update_calibrated_tools(self, left_q, left_distance, right_q, right_distance):
-        left_z = calibrated_z_axis(
-            left_q, self.zero_rotations["left"], self.reference_rotations["left"],
-            self.inverse_delta, self.rotation_frame
+        left_rot = calibrated_rotation(
+            left_q, self.zero_rotations["left"], self.reference_rotations["left"]
         )
-        right_z = calibrated_z_axis(
-            right_q, self.zero_rotations["right"], self.reference_rotations["right"],
-            self.inverse_delta, self.rotation_frame
+        right_rot = calibrated_rotation(
+            right_q, self.zero_rotations["right"], self.reference_rotations["right"]
         )
+        left_z = left_rot.apply([0., 0., 1.])
+        right_z = right_rot.apply([0., 0., 1.])
         left_geometry = calculate_tool_geometry(
             rcm=LEFT_RCM, z_axis=left_z, tof_distance=left_distance,
-            tof_offset=LEFT_TOF_OFFSET, tip_correction=LEFT_TIP_CORRECTION
+            tof_offset=LEFT_TOF_OFFSET, imu_from_tof_mm=LEFT_IMU_FROM_TOF_MM
         )
         right_geometry = calculate_tool_geometry(
             rcm=RIGHT_RCM, z_axis=right_z, tof_distance=right_distance,
-            tof_offset=RIGHT_TOF_OFFSET, tip_correction=RIGHT_TIP_CORRECTION
+            tof_offset=RIGHT_TOF_OFFSET, imu_from_tof_mm=RIGHT_IMU_FROM_TOF_MM
         )
-        self.update_tool(self.left_tool, left_geometry)
-        self.update_tool(self.right_tool, right_geometry)
+        self.update_tool(self.left_tool, left_geometry, left_rot)
+        self.update_tool(self.right_tool, right_geometry, right_rot)
         self.status.setText(
-            f"LIVE / ZEROED [{self.rotation_frame}, inverse={'ON' if self.inverse_delta else 'OFF'}] "
-            f"| LEFT: ToF {left_distance:.1f} mm | length {LEFT_TOOL_LENGTH:.1f} mm "
+            f"ZEROED | LEFT: raw ToF {left_distance:.1f} mm | length {LEFT_TOOL_LENGTH:.1f} mm "
             f"| tip {np.round(left_geometry['tip'], 1)}\n"
-            f"ZEROED | RIGHT: ToF {right_distance:.1f} mm | length {RIGHT_TOOL_LENGTH:.1f} mm "
+            f"ZEROED | RIGHT: raw ToF {right_distance:.1f} mm | length {RIGHT_TOOL_LENGTH:.1f} mm "
             f"| tip {np.round(right_geometry['tip'], 1)}"
         )
 
