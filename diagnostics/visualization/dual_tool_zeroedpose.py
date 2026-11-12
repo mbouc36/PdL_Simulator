@@ -1,7 +1,7 @@
 
 """
 Author: Joya
-Version: 4.2e — X in WRF XZ plane, Y right-handed, Z shaft
+Version: 4.2f — updated pegboard XYZ coordinates and -12.551 mm Z displacement
 
 Description:
 Live dual-tool 3D visualization using IMU quaternions
@@ -11,6 +11,7 @@ Changes from v4.2:
 - Restores full 285.5 mm wall-to-tip length on both tools
 - Adds short local X and Y orientation axes at a configurable IMU location
 - Press Z to set full pose: local X in WRF XZ plane, local Z toward target
+- Uses updated pegboard coordinates with an additional -12.551 mm Z shift
 - No data is saved
 """
 
@@ -85,22 +86,34 @@ LEFT_RCM = np.array([0.000, 0.000, 0.000])
 RIGHT_RCM = np.array([-1.880, -93.263, -0.869])
 CAMERA_LENS = np.array([13.355, -45.835, 2.959])
 
-CALIBRATION_POINTS = {
-    "R1C1": (53.518, -9.291, -87.031),
-    "R1C7": (53.518, -83.791, -87.031),
-    "R2C5": (57.268, -63.041, -70.031),
-    "R3C2": (62.268, -12.541, -70.031),
-    "R3C3": (62.268, -32.541, -70.031),
-    "R4C4": (72.268, -50.541, -70.031),
-    "R4C6": (72.268, -75.541, -70.031),
-    "R5C2": (87.268, -12.541, -70.031),
-    "R5C3": (87.268, -32.541, -70.031),
-    "R6C4": (72.268 + 30, -50.541, -70.031),
-    "R6C6": (72.268 + 30, -75.541, -70.031),
-    "R7C2": (112.268, -12.541, -70.031),
-    "R7C3": (112.268, -32.541, -70.031),
-    "R8C5": (117.268, -63.041, -70.031),
+# User-provided pegboard coordinates before the additional vertical displacement.
+# All positions are in millimeters in the existing WRF.
+PEGBOARD_Z_SHIFT_MM = -12.551
+
+PEGBOARD_POINTS_BASE = {
+    "R1C1": (-36.544, 0.826, -130.766),
+    "R1C7": (37.956, 0.826, -130.766),
+    "R2C5": (17.206, 4.576, -113.766),
+    "R3C2": (-33.294, 9.576, -113.766),
+    "R3C3": (-13.294, 9.576, -113.766),
+    "R4C4": (4.706, 19.576, -113.766),
+    "R4C6": (29.706, 19.576, -113.766),
+    "R5C2": (-33.294, 34.576, -113.766),
+    "R5C3": (-13.294, 34.576, -113.766),
+    "R6C4": (4.706, 49.576, -113.766),
+    "R6C6": (29.706, 49.576, -113.766),
+    "R7C2": (-33.294, 59.576, -113.766),
+    "R7C3": (-13.294, 59.576, -113.766),
+    "R8C5": (17.206, 64.576, -113.766),
 }
+
+# Shift ONLY the pegboard points, including both calibration targets.
+# RCM positions and camera lens remain unchanged.
+CALIBRATION_POINTS = {
+    name: (x, y, z + PEGBOARD_Z_SHIFT_MM)
+    for name, (x, y, z) in PEGBOARD_POINTS_BASE.items()
+}
+
 
 
 # ============================================================
@@ -252,7 +265,7 @@ class VisualizeDualIMU(QWidget):
         super().__init__()
 
         self.setWindowTitle(
-            "Dual Tool Geometry - WRF XZ-Plane IMU Calibration (v4.2e)"
+            "Dual Tool Geometry - WRF XZ-Plane IMU Calibration (v4.2f)"
         )
 
         self.resize(1400, 950)
