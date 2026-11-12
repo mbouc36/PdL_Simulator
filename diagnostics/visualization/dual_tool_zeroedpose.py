@@ -1,7 +1,7 @@
 
 """
 Author: Joya
-Version: 4.2d — full-pose calibration (IMU X up, Y right, Z shaft)
+Version: 4.2e — X in WRF XZ plane, Y right-handed, Z shaft
 
 Description:
 Live dual-tool 3D visualization using IMU quaternions
@@ -10,7 +10,7 @@ and ToF distance measurements.
 Changes from v4.2:
 - Restores full 285.5 mm wall-to-tip length on both tools
 - Adds short local X and Y orientation axes at a configurable IMU location
-- Press Z to set full tool pose: +X up, +Y right, +Z toward R1C1/R1C7
+- Press Z to set full pose: local X in WRF XZ plane, local Z toward target
 - No data is saved
 """
 
@@ -121,32 +121,41 @@ def as_rotation(q):
     return rot.inv() if INVERT_QUATERNION else rot
 
 
-def target_rotation(rcm, target):
-    """Full calibration orientation in pegboard coordinates.
+# If the displayed local +X direction is reversed relative to the physical IMU,
+# change the corresponding sign to -1. Both X and Y flip together to preserve
+# a right-handed rotation frame; Z remains unchanged.
+LEFT_X_SIGN = 1
+RIGHT_X_SIGN = 1
 
-    +Z: RCM -> target peg, matching the physical tool shaft.
-    +X: as upward as possible (projection of world +Z).
-    +Y: cross(+Z, +X), yielding a right-handed frame.
 
-    For these target directions, +Y points approximately toward world -Y,
-    the direction from the left RCM toward the right RCM.
+def target_rotation(rcm, target, x_sign=1):
+    """Construct the complete calibration orientation in the WRF.
+
+    Local +Z: unit vector from the RCM to the calibration target.
+    Local +X: lies in WRF XZ plane (world Y component is exactly zero),
+              perpendicular to +Z.
+    Local +Y: +Z cross +X (right-handed orthonormal basis).
+
+    The two possible X directions differ by 180 degrees around Z.
+    x_sign selects the physical IMU +X direction at calibration.
     """
+    if x_sign not in (-1, 1):
+        raise ValueError("x_sign must be +1 or -1")
+
     z_axis = np.asarray(target, dtype=float) - np.asarray(rcm, dtype=float)
     z_norm = np.linalg.norm(z_axis)
     if z_norm < 1e-10:
-        raise ValueError("RCM and target must be distinct")
-    z_axis /= z_norm
+        raise ValueError("RCM and calibration target must be distinct")
+    z_axis = z_axis / z_norm
 
-    world_up = np.array([0.0, 0.0, 1.0])
-    x_axis = world_up - np.dot(world_up, z_axis) * z_axis
-    if np.linalg.norm(x_axis) < 1e-8:
-        # Fallback only if the tool shaft is parallel to world up.
-        alternative = np.array([1.0, 0.0, 0.0])
-        x_axis = alternative - np.dot(alternative, z_axis) * z_axis
-    x_axis /= np.linalg.norm(x_axis)
+    zx, _, zz = z_axis
+    x_norm = np.hypot(zx, zz)
+    if x_norm < 1e-10:
+        raise ValueError("Tool Z is parallel to WRF Y: X cannot be uniquely defined")
+
+    x_axis = x_sign * np.array([-zz, 0.0, zx]) / x_norm
     y_axis = np.cross(z_axis, x_axis)
     y_axis /= np.linalg.norm(y_axis)
-    x_axis = np.cross(y_axis, z_axis)  # enforce orthonormality
 
     basis = np.column_stack((x_axis, y_axis, z_axis))
     return Rotation.from_matrix(basis)
@@ -157,7 +166,7 @@ def calibrated_rotation(raw_q, zero_rotation, reference_rotation):
 
     Assumes the IMU local +Z axis is aligned with the tool shaft.
     A pure local-Z roll therefore leaves the tool pointing axis unchanged.
-    The full starting pose is +X up, +Y right, +Z toward target.
+    The starting X is in WRF XZ plane; Y completes a right-handed frame.
     """
     raw_rotation = as_rotation(raw_q)
     delta_local = zero_rotation.inv() * raw_rotation
@@ -243,7 +252,7 @@ class VisualizeDualIMU(QWidget):
         super().__init__()
 
         self.setWindowTitle(
-            "Dual Tool Geometry - Full-Pose IMU Calibration (v4.2d)"
+            "Dual Tool Geometry - WRF XZ-Plane IMU Calibration (v4.2e)"
         )
 
         self.resize(1400, 950)
@@ -270,8 +279,8 @@ class VisualizeDualIMU(QWidget):
         self.latest_sample = None
         self.zero_rotations = None
         self.reference_rotations = {
-            "left": target_rotation(LEFT_RCM, CALIBRATION_POINTS["R1C1"]),
-            "right": target_rotation(RIGHT_RCM, CALIBRATION_POINTS["R1C7"]),
+            "left": target_rotation(LEFT_RCM, CALIBRATION_POINTS["R1C1"], LEFT_X_SIGN),
+            "right": target_rotation(RIGHT_RCM, CALIBRATION_POINTS["R1C7"], RIGHT_X_SIGN),
         }
 
         # Shared 3D view
@@ -336,7 +345,7 @@ class VisualizeDualIMU(QWidget):
             self.load_data
         )
         self.data_thread.start()
-        self.status.setText("Point LEFT at R1C1 and RIGHT at R1C7, orient IMU +X UP and +Y RIGHT, then press Z.")
+        self.status.setText("Point LEFT at R1C1 and RIGHT at R1C7; align IMU +X in WRF XZ plane, then press Z.")
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Z and not event.isAutoRepeat():
