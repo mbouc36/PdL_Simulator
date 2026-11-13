@@ -1,7 +1,7 @@
 
 """
 Author: Joya
-Version: 4.2h — original pegboard XY, Z lowered 12.551 mm
+Version: 4.2i — tick-mark-down IMU calibration
 
 Description:
 Live dual-tool 3D visualization using IMU quaternions
@@ -10,7 +10,7 @@ and ToF distance measurements.
 Changes from v4.2:
 - Restores full 285.5 mm wall-to-tip length on both tools
 - Adds short local X and Y orientation axes at a configurable IMU location
-- Press Z to set full pose: local X in WRF XZ plane, local Z toward target
+- Press Z: local Z toward target; local X upward across cylinder; local Y right
 - Uses original pegboard X/Y coordinates and Z lowered by 12.551 mm
 - No data is saved
 """
@@ -133,15 +133,17 @@ RIGHT_X_SIGN = 1
 
 
 def target_rotation(rcm, target, x_sign=1):
-    """Construct the complete calibration orientation in the WRF.
+    """Construct IMU-to-WRF orientation for tick-mark-down calibration.
 
-    Local +Z: unit vector from the RCM to the calibration target.
-    Local +X: lies in WRF XZ plane (world Y component is exactly zero),
-              perpendicular to +Z.
-    Local +Y: +Z cross +X (right-handed orthonormal basis).
+    At the instant Z is pressed:
+      * IMU local +Z follows the shaft from RCM toward the calibration peg.
+      * The cylinder tick mark faces world-vertical downward.
+      * IMU local +X points toward the upper side of the cylinder, i.e.
+        the projection of world-up onto the plane perpendicular to the shaft.
+      * IMU local +Y = +Z cross +X (right-handed frame).
 
-    The two possible X directions differ by 180 degrees around Z.
-    x_sign selects the physical IMU +X direction at calibration.
+    Neither local +X nor local +Y is constrained to any WRF plane or axis.
+    The physical IMU must be aligned to this assumed pose before zeroing.
     """
     if x_sign not in (-1, 1):
         raise ValueError("x_sign must be +1 or -1")
@@ -152,12 +154,16 @@ def target_rotation(rcm, target, x_sign=1):
         raise ValueError("RCM and calibration target must be distinct")
     z_axis = z_axis / z_norm
 
-    zx, _, zz = z_axis
-    x_norm = np.hypot(zx, zz)
-    if x_norm < 1e-10:
-        raise ValueError("Tool Z is parallel to WRF Y: X cannot be uniquely defined")
+    world_up = np.array([0.0, 0.0, 1.0])
+    x_axis = world_up - np.dot(world_up, z_axis) * z_axis
+    x_norm = np.linalg.norm(x_axis)
+    if x_norm < 1e-8:
+        raise ValueError(
+            "Tool shaft is parallel to WRF vertical; tick-mark-down "
+            "does not uniquely determine the IMU roll angle"
+        )
+    x_axis = x_sign * x_axis / x_norm
 
-    x_axis = x_sign * np.array([-zz, 0.0, zx]) / x_norm
     y_axis = np.cross(z_axis, x_axis)
     y_axis /= np.linalg.norm(y_axis)
 
@@ -170,7 +176,7 @@ def calibrated_rotation(raw_q, zero_rotation, reference_rotation):
 
     Assumes the IMU local +Z axis is aligned with the tool shaft.
     A pure local-Z roll therefore leaves the tool pointing axis unchanged.
-    The starting X is in WRF XZ plane; Y completes a right-handed frame.
+    At zero, X is the projected world-up direction and Y is Z cross X.
     """
     raw_rotation = as_rotation(raw_q)
     delta_local = zero_rotation.inv() * raw_rotation
@@ -256,7 +262,7 @@ class VisualizeDualIMU(QWidget):
         super().__init__()
 
         self.setWindowTitle(
-            "Dual Tool Geometry - WRF XZ-Plane IMU Calibration (v4.2g)"
+            "Dual Tool Geometry - Tick-Mark-Down IMU Calibration (v4.2i)"
         )
 
         self.resize(1400, 950)
@@ -349,7 +355,7 @@ class VisualizeDualIMU(QWidget):
             self.load_data
         )
         self.data_thread.start()
-        self.status.setText("Point LEFT at R1C1 and RIGHT at R1C7; align IMU +X in WRF XZ plane, then press Z.")
+        self.status.setText("Point LEFT at R1C1 and RIGHT at R1C7; tick marks vertically DOWN, then press Z.")
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Z and not event.isAutoRepeat():
