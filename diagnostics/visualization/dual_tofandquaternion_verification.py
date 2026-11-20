@@ -14,16 +14,25 @@ Changing dropdowns never changes the stored zero orientation.
 import os
 import sys
 import time
+from collections import deque
 import numpy as np
 import serial
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from scipy.spatial.transform import Rotation
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QComboBox, QGroupBox, QGridLayout)
 
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../..'))
+# Locate the project root even when this script is moved one directory higher.
+from pathlib import Path
+_here = Path(__file__).resolve().parent
+_project_root = next((p for p in (_here, *_here.parents)
+                      if (p / 'update_config.py').is_file()
+                      and (p / 'tools' / 'imu_orientation.py').is_file()), None)
+if _project_root is None:
+    raise ImportError('Cannot find project root containing update_config.py and tools/imu_orientation.py')
+sys.path.insert(0, str(_project_root))
 from update_config import load_config
 from tools.imu_orientation import IMUQuaternionTracker
 from tools.tof_manager import TOFManager
@@ -31,7 +40,12 @@ from tools.tof_manager import TOFManager
 config = load_config()
 SERIAL_PORT = config['serial_port']
 BAUD_RATE = config['baud_rate']
-COUNT_TILL_SETTLED = 400
+MADGWICK_GAIN = 0.01  # Constant throughout initialization AND normal operation.
+CONVERGENCE_THRESHOLD_DEG = 2.0
+CONVERGENCE_WINDOW_S = 1.0
+STABILITY_DURATION_S = 2.0
+MAX_CONVERGENCE_TIME_S = 60.0  # Report a warning; continue waiting.
+PRINT_INTERVAL_S = 0.5
 QUATERNION_ORDER = 'wxyz'
 INVERT_QUATERNION = False
 MAX_ZERO_SAMPLE_AGE_S = 0.5
@@ -138,9 +152,48 @@ def geometry(rcm, rotation, tof, offset):
     return {'rcm': rcm, 'tof': tof_position, 'wall': wall, 'tip': tip, 'imu': imu}
 
 
+class AngularStabilityMonitor:
+    """Detect a stable quaternion over a full time window, sustained in time.
+
+    This measures relative rotation magnitude, NOT absolute pose accuracy.
+    """
+    def __init__(self):
+        self.history = deque()
+        self.stable_since = None
+        self.converged = False
+        self.samples = 0
+        self.window_angle_deg = None
+
+    def update(self, q, now):
+        if self.converged:
+            return True
+        self.samples += 1
+        self.history.append((now, as_rotation(q)))
+        while len(self.history) > 1 and now - self.history[1][0] >= CONVERGENCE_WINDOW_S:
+            self.history.popleft()
+        oldest_time, oldest_rot = self.history[0]
+        if now - oldest_time < CONVERGENCE_WINDOW_S:
+            self.stable_since = None
+            return False
+        self.window_angle_deg = max(
+            np.degrees((oldest_rot.inv() * rot).magnitude())
+            for _, rot in self.history
+        )
+        if self.window_angle_deg < CONVERGENCE_THRESHOLD_DEG:
+            if self.stable_since is None:
+                self.stable_since = now
+            if now - self.stable_since >= STABILITY_DURATION_S:
+                self.converged = True
+        else:
+            self.stable_since = None
+        return self.converged
+
+
 class SerialData(QThread):
     sample = pyqtSignal(object)
     error = pyqtSignal(str)
+    converged = pyqtSignal(object)
+    progress = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -158,20 +211,30 @@ class SerialData(QThread):
         try:
             left_tracker = IMUQuaternionTracker('left', use_offset=False)
             right_tracker = IMUQuaternionTracker('right', use_offset=False)
+            left_tracker.set_gain(MADGWICK_GAIN)
+            right_tracker.set_gain(MADGWICK_GAIN)
             tof_manager = TOFManager()
-            counter = 0
+            left_monitor = AngularStabilityMonitor()
+            right_monitor = AngularStabilityMonitor()
+            ready = False
+            first_timestamp = None
+            start = None
+            last_print = 0.0
+            warned = False
             while self.running:
                 try:
                     parts = ser.readline().decode('utf-8').strip().split(',')
                     if len(parts) < 23:
                         continue
-                    counter += 1
-                    if counter == COUNT_TILL_SETTLED:
-                        left_tracker.set_gain(0.2)
-                        right_tracker.set_gain(0.2)
                     arduino_time = parts[0]
+                    # Ignore the first sample so the first dt is not huge.
+                    if first_timestamp is None:
+                        first_timestamp = float(arduino_time)
+                        left_tracker.previous_time = first_timestamp
+                        right_tracker.previous_time = first_timestamp
+                        continue
                     left_q = left_tracker.get_quaternion([arduino_time] + parts[5:14])
-                    right_q = right_tracker.get_quaternion([arduino_time] + parts[14:])
+                    right_q = right_tracker.get_quaternion([arduino_time] + parts[14:23])
                     if left_q is None or right_q is None:
                         continue
                     d = list(tof_manager.get_distances(parts[3:5]))
@@ -253,8 +316,24 @@ class VerificationGUI(QWidget):
         self.thread = SerialData()
         self.thread.sample.connect(self.receive)
         self.thread.error.connect(self.serial_error)
+        self.thread.converged.connect(self.on_converged)
+        self.thread.progress.connect(self.on_progress)
         self.thread.start()
         self.refresh()
+
+    def on_converged(self, result):
+        self.status.setText(
+            f"Both IMUs stable after {result['elapsed_s']:.2f} s "
+            f"(left {result['left_samples']} samples; right {result['right_samples']} samples). "
+            f"Gain stays at {MADGWICK_GAIN}. Now place tools at fixed zero holes and press Z."
+        )
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def on_progress(self, message):
+        # GUI remains hidden until both filters satisfy the stability test.
+        self.status.setText(message)
 
     def static_point(self, position, color, size, name):
         self.view.addItem(gl.GLScatterPlotItem(pos=np.asarray(position).reshape(1, 3),
@@ -373,6 +452,7 @@ class VerificationGUI(QWidget):
         self.thread.stop()
         self.thread.wait()
         super().closeEvent(event)
+        QApplication.instance().quit()
 
 
 if __name__ == '__main__':
@@ -384,5 +464,8 @@ if __name__ == '__main__':
         print(f'{key}: {point}')
     app = QApplication(sys.argv)
     gui = VerificationGUI()
-    gui.show()
+    print(f'Waiting for BOTH IMUs to stabilize at constant Madgwick gain {MADGWICK_GAIN}.')
+    print('GUI will open only after convergence. Keep both IMUs stationary.')
+    # Keep the hidden window and its worker alive until the worker emits converged.
+    app.setQuitOnLastWindowClosed(False)
     sys.exit(app.exec())
