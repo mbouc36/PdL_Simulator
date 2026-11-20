@@ -44,7 +44,7 @@ MADGWICK_GAIN = 0.01  # Constant throughout initialization AND normal operation.
 CONVERGENCE_THRESHOLD_DEG = 2.0
 CONVERGENCE_WINDOW_S = 1.0
 STABILITY_DURATION_S = 2.0
-MAX_CONVERGENCE_TIME_S = 60.0  # Report a warning; continue waiting.
+MAX_CONVERGENCE_TIME_S = 60.0  # Exit program if both IMUs have not converged.
 PRINT_INTERVAL_S = 0.5
 QUATERNION_ORDER = 'wxyz'
 INVERT_QUATERNION = False
@@ -194,6 +194,7 @@ class SerialData(QThread):
     error = pyqtSignal(str)
     converged = pyqtSignal(object)
     progress = pyqtSignal(str)
+    failed = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -218,16 +219,24 @@ class SerialData(QThread):
             right_monitor = AngularStabilityMonitor()
             ready = False
             first_timestamp = None
-            start = None
+            start = time.monotonic()  # Timeout includes waiting for first valid data.
             last_print = 0.0
-            warned = False
             while self.running:
+                now = time.monotonic()
+                if not ready and now - start >= MAX_CONVERGENCE_TIME_S:
+                    message = (f'CONVERGENCE TIMEOUT after {MAX_CONVERGENCE_TIME_S:.1f}s: '
+                               f'LEFT={left_monitor.converged} '
+                               f'({left_monitor.samples} samples), '
+                               f'RIGHT={right_monitor.converged} '
+                               f'({right_monitor.samples} samples). Exiting.')
+                    print(message, flush=True)
+                    self.failed.emit(message)
+                    break
                 try:
                     parts = ser.readline().decode('utf-8').strip().split(',')
                     if len(parts) < 23:
                         continue
                     arduino_time = parts[0]
-                    # Ignore the first sample so the first dt is not huge.
                     if first_timestamp is None:
                         first_timestamp = float(arduino_time)
                         left_tracker.previous_time = first_timestamp
@@ -237,12 +246,38 @@ class SerialData(QThread):
                     right_q = right_tracker.get_quaternion([arduino_time] + parts[14:23])
                     if left_q is None or right_q is None:
                         continue
+                    left_q = np.asarray(left_q, dtype=float)
+                    right_q = np.asarray(right_q, dtype=float)
+                    if not np.isfinite(left_q).all() or not np.isfinite(right_q).all():
+                        continue
+                    now = time.monotonic()
+                    if not ready:
+                        left_monitor.update(left_q, now)
+                        right_monitor.update(right_q, now)
+                        if now - last_print >= PRINT_INTERVAL_S:
+                            def detail(m):
+                                angle = ('waiting' if m.window_angle_deg is None
+                                         else f'{m.window_angle_deg:.3f} deg')
+                                return f'{angle}, {m.samples} samples, converged={m.converged}'
+                            msg = (f'{now-start:.1f}s | LEFT: {detail(left_monitor)} '
+                                   f'| RIGHT: {detail(right_monitor)}')
+                            print(msg, flush=True)
+                            self.progress.emit(msg)
+                            last_print = now
+                        if left_monitor.converged and right_monitor.converged:
+                            ready = True
+                            result = {'elapsed_s': now-start,
+                                      'left_samples': left_monitor.samples,
+                                      'right_samples': right_monitor.samples}
+                            print(f'BOTH IMUs CONVERGED in {now-start:.2f}s; GUI opening. '
+                                  f'Gain remains {MADGWICK_GAIN}.', flush=True)
+                            self.converged.emit(result)
+                    # Keep updating quaternions with constant gain after convergence.
                     d = list(tof_manager.get_distances(parts[3:5]))
                     if len(d) < 2:
                         continue
-                    self.sample.emit((time.monotonic(), np.asarray(left_q).copy(),
-                                      float(d[0]) * TOF_TO_MM, np.asarray(right_q).copy(),
-                                      float(d[1]) * TOF_TO_MM))
+                    self.sample.emit((now, left_q.copy(), float(d[0]) * TOF_TO_MM,
+                                      right_q.copy(), float(d[1]) * TOF_TO_MM))
                 except Exception as exc:
                     self.error.emit(f'Data error: {exc}')
         finally:
@@ -318,6 +353,7 @@ class VerificationGUI(QWidget):
         self.thread.error.connect(self.serial_error)
         self.thread.converged.connect(self.on_converged)
         self.thread.progress.connect(self.on_progress)
+        self.thread.failed.connect(self.on_failed)
         self.thread.start()
         self.refresh()
 
@@ -330,6 +366,11 @@ class VerificationGUI(QWidget):
         self.show()
         self.raise_()
         self.activateWindow()
+
+    def on_failed(self, message):
+        print(message, flush=True)
+        self.thread.stop()
+        QApplication.instance().exit(1)
 
     def on_progress(self, message):
         # GUI remains hidden until both filters satisfy the stability test.
@@ -466,6 +507,7 @@ if __name__ == '__main__':
     gui = VerificationGUI()
     print(f'Waiting for BOTH IMUs to stabilize at constant Madgwick gain {MADGWICK_GAIN}.')
     print('GUI will open only after convergence. Keep both IMUs stationary.')
+    print('If both IMUs are not converged within 60 seconds, the program exits.')
     # Keep the hidden window and its worker alive until the worker emits converged.
     app.setQuitOnLastWindowClosed(False)
     sys.exit(app.exec())
