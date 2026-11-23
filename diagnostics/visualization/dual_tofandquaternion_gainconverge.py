@@ -394,6 +394,19 @@ class VerificationGUI(QWidget):
         self.hole_items.clear()
         for name, point in self.holes.items():
             self.hole_items.extend(self.static_point(point, (0.2, 0.7, 1, 1), 9, name))
+            # On the new board only, draw a 15 mm white peg line in -Z.
+            # Exclude the two starting holes used for zero calibration.
+            if self.board_name == 'New 14-hole' and name not in ('R1C1', 'R1C7'):
+                start = np.asarray(point, dtype=float)
+                end = start + np.array([0.0, 0.0, -15.0])
+                peg_line = gl.GLLinePlotItem(
+                    pos=np.vstack((start, end)),
+                    color=(1.0, 1.0, 1.0, 1.0),
+                    width=2,
+                    antialias=True,
+                )
+                self.view.addItem(peg_line)
+                self.hole_items.append(peg_line)
 
     def switch_board(self, board_name):
         config = BOARD_CONFIGS[board_name]
