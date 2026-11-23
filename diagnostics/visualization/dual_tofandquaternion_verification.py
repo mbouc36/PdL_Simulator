@@ -66,6 +66,29 @@ FUSION_HOLES = {
 }
 
 
+# Alternate board (Fusion coordinates, mm).
+FUSION_HOLES_NEW = {
+    'R1C1': (-36.544, 0.826, -143.317),
+    'R1C7': (37.956, 0.826, -143.317),
+    'R2C5': (17.206, 4.576, -126.317),
+    'R3C2': (-33.294, 9.576, -126.317),
+    'R3C3': (-13.294, 9.576, -126.317),
+    'R4C4': (4.706, 19.576, -126.317),
+    'R4C6': (29.706, 19.576, -126.317),
+    'R5C2': (-33.294, 34.576, -126.317),
+    'R5C3': (-13.294, 34.576, -126.317),
+    'R6C4': (4.706, 49.576, -126.317),
+    'R6C6': (29.706, 49.576, -126.317),
+    'R7C2': (-33.294, 59.576, -126.317),
+    'R7C3': (-13.294, 59.576, -126.317),
+    'R8C5': (17.206, 64.576, -126.317),
+}
+BOARD_OPTIONS = {
+    'Original board (6x2)': (FUSION_HOLES, 'R1C1', 'R1C2'),
+    'New board (14 holes)': (FUSION_HOLES_NEW, 'R1C1', 'R1C7'),
+}
+
+
 def fusion_to_wrf(point):
     delta = np.asarray(point, dtype=float) - np.asarray(FUSION_LEFT_RCM, dtype=float)
     return np.array([delta[1], -delta[0], delta[2]], dtype=float)
@@ -198,6 +221,10 @@ class VerificationGUI(QWidget):
         root = QVBoxLayout(self)
         top = QGroupBox('Selected holes, expected measurements and live sensor measurements')
         controls = QGridLayout(top)
+        self.board_select = QComboBox()
+        self.board_select.addItems(BOARD_OPTIONS.keys())
+        controls.addWidget(QLabel('Board:'), 0, 4)
+        controls.addWidget(self.board_select, 0, 5)
         self.left_select = QComboBox()
         self.right_select = QComboBox()
         self.left_select.addItems(HOLES.keys())
@@ -241,13 +268,14 @@ class VerificationGUI(QWidget):
         self.static_point(LEFT_RCM, (0, 1, 0, 1), 13, 'Left RCM')
         self.static_point(RIGHT_RCM, (1, 0, 0, 1), 13, 'Right RCM')
         self.static_point(CAMERA_LENS, (1, 1, 0, 1), 12, 'Camera')
-        for name, point in HOLES.items():
-            self.static_point(point, (0.2, 0.7, 1, 1), 9, name)
+        self.board_points = []
+        self.update_board_points()
         # Expected poses: cyan/magenta. Measured poses: green/red.
         self.expected_left = self.make_tool((0, 1, 1, 1), dashed=False)
         self.expected_right = self.make_tool((1, 0.3, 1, 1), dashed=False)
         self.measured_left = self.make_tool((0, 1, 0, 1), dashed=False)
         self.measured_right = self.make_tool((1, 0.1, 0.1, 1), dashed=False)
+        self.board_select.currentTextChanged.connect(self.change_board)
         self.left_select.currentTextChanged.connect(self.refresh)
         self.right_select.currentTextChanged.connect(self.refresh)
         self.thread = SerialData()
@@ -257,10 +285,58 @@ class VerificationGUI(QWidget):
         self.refresh()
 
     def static_point(self, position, color, size, name):
-        self.view.addItem(gl.GLScatterPlotItem(pos=np.asarray(position).reshape(1, 3),
-                                               color=color, size=size, pxMode=True))
-        self.view.addItem(gl.GLTextItem(pos=np.asarray(position), text=name,
-                                       color=(255, 255, 255, 255)))
+        dot = gl.GLScatterPlotItem(pos=np.asarray(position).reshape(1, 3),
+                                   color=color, size=size, pxMode=True)
+        label = gl.GLTextItem(pos=np.asarray(position), text=name,
+                              color=(255, 255, 255, 255))
+        self.view.addItem(dot)
+        self.view.addItem(label)
+        return dot, label
+
+    def update_board_points(self):
+        for item in self.board_points:
+            self.view.removeItem(item)
+        self.board_points.clear()
+        for name, point in HOLES.items():
+            self.board_points.extend(self.static_point(point, (0.2, 0.7, 1, 1), 9, name))
+
+    def change_board(self, board_name):
+        global HOLES, LEFT_ZERO_HOLE, RIGHT_ZERO_HOLE
+        fusion_holes, LEFT_ZERO_HOLE, RIGHT_ZERO_HOLE = BOARD_OPTIONS[board_name]
+        HOLES = {name: fusion_to_wrf(point) for name, point in fusion_holes.items()}
+        self.zero = None
+        self.zero_reference = None
+        self.left_select.blockSignals(True)
+        self.right_select.blockSignals(True)
+        self.left_select.clear()
+        self.right_select.clear()
+        self.left_select.addItems(HOLES.keys())
+        self.right_select.addItems(HOLES.keys())
+        self.left_select.setCurrentText(LEFT_ZERO_HOLE)
+        self.right_select.setCurrentText(RIGHT_ZERO_HOLE)
+        self.left_select.blockSignals(False)
+        self.right_select.blockSignals(False)
+        self.update_board_points()
+        self.update_zero_instructions()
+        # Hide measured poses until a fresh zero calibration is performed.
+        for tool in (self.measured_left, self.measured_right):
+            for part_name, item in tool.items():
+                count = 1 if part_name == 'tip' else 2
+                item.setData(pos=np.full((count, 3), np.nan))
+        self.refresh()
+
+    def update_zero_instructions(self):
+        left, right = LEFT_ZERO_HOLE, RIGHT_ZERO_HOLE
+        self.zero_button.setText(
+            f'STEP 1 — Zero: LEFT {left}, RIGHT {right}, tick marks DOWN (Z)')
+        self.instructions.setText(
+            f'FIRST: Put LEFT tip at {left} and RIGHT tip at {right}; align BOTH cylinder '
+            'tick marks down and press Z. THEN: Move tools and select their verification '
+            'holes. The zero references stay fixed. For full quaternion comparison, '
+            'keep tick marks down at each verification hole.')
+        self.status.setText(
+            f'NOT ZEROED — place LEFT at {left} and RIGHT at {right}; tick marks down; '
+            'press Z. Expected poses are shown below.')
 
     def make_tool(self, color, dashed=False):
         hidden = np.full((2, 3), np.nan)
@@ -312,7 +388,7 @@ class VerificationGUI(QWidget):
             return
         self.zero = new_zero
         self.zero_reference = new_reference
-        self.status.setText('ZEROED — LEFT R1C1 / RIGHT R1C2. Select verification holes above. Tick marks must remain down for full orientation comparison.')
+        self.status.setText(f'ZEROED — LEFT {LEFT_ZERO_HOLE} / RIGHT {RIGHT_ZERO_HOLE}. Select verification holes above. Tick marks must remain down for full orientation comparison.')
         self.refresh()
 
     def keyPressEvent(self, event):
