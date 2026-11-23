@@ -40,12 +40,12 @@ from tools.tof_manager import TOFManager
 config = load_config()
 SERIAL_PORT = config['serial_port']
 BAUD_RATE = config['baud_rate']
-MADGWICK_GAIN = 0.2  # Constant throughout initialization AND normal operation.
-CONVERGENCE_THRESHOLD_DEG = 2.0
+MADGWICK_GAIN = 0.05  # Constant throughout initialization AND normal operation.
+CONVERGENCE_THRESHOLD_DEG = 1.0
 CONVERGENCE_WINDOW_S = 1.0
 STABILITY_DURATION_S = 2.0
-MAX_CONVERGENCE_TIME_S = 30.0  # Exit program if both IMUs have not converged.
-PRINT_INTERVAL_S = 0.5
+MAX_CONVERGENCE_TIME_S = 600.0  # Exit program if both IMUs have not converged.
+PRINT_INTERVAL_S = 1
 QUATERNION_ORDER = 'wxyz'
 INVERT_QUATERNION = False
 MAX_ZERO_SAMPLE_AGE_S = 0.5
