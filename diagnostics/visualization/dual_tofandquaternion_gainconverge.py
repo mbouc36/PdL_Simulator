@@ -80,6 +80,28 @@ FUSION_HOLES = {
 }
 
 
+NEW_FUSION_HOLES = {
+    'R1C1': (-36.544, 0.826, -143.317),
+    'R1C7': (37.956, 0.826, -143.317),
+    'R2C5': (17.206, 4.576, -126.317),
+    'R3C2': (-33.294, 9.576, -126.317),
+    'R3C3': (-13.294, 9.576, -126.317),
+    'R4C4': (4.706, 19.576, -126.317),
+    'R4C6': (29.706, 19.576, -126.317),
+    'R5C2': (-33.294, 34.576, -126.317),
+    'R5C3': (-13.294, 34.576, -126.317),
+    'R6C4': (4.706, 49.576, -126.317),
+    'R6C6': (29.706, 49.576, -126.317),
+    'R7C2': (-33.294, 59.576, -126.317),
+    'R7C3': (-13.294, 59.576, -126.317),
+    'R8C5': (17.206, 64.576, -126.317),
+}
+BOARD_CONFIGS = {
+    'Original 6x2': {'holes': FUSION_HOLES, 'left_zero': 'R1C1', 'right_zero': 'R1C2'},
+    'New 14-hole': {'holes': NEW_FUSION_HOLES, 'left_zero': 'R1C1', 'right_zero': 'R1C7'},
+}
+
+
 def fusion_to_wrf(point):
     delta = np.asarray(point, dtype=float) - np.asarray(FUSION_LEFT_RCM, dtype=float)
     return np.array([delta[1], -delta[0], delta[2]], dtype=float)
@@ -287,15 +309,23 @@ class SerialData(QThread):
 class VerificationGUI(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('Dual IMU — Pegboard Quaternion and ToF Verification')
+        self.setWindowTitle('Dual IMU — Switchable Pegboard Verification')
         self.resize(1450, 1000)
         self.latest = None
         self.zero = None
         self.zero_reference = None
+        self.board_name = 'Original 6x2'
+        self.holes = dict(HOLES)
+        self.left_zero_hole = LEFT_ZERO_HOLE
+        self.right_zero_hole = RIGHT_ZERO_HOLE
         self.setFocusPolicy(Qt.StrongFocus)
         root = QVBoxLayout(self)
         top = QGroupBox('Selected holes, expected measurements and live sensor measurements')
         controls = QGridLayout(top)
+        self.board_select = QComboBox()
+        self.board_select.addItems(BOARD_CONFIGS.keys())
+        controls.addWidget(QLabel('Board:'), 0, 4)
+        controls.addWidget(self.board_select, 0, 5)
         self.left_select = QComboBox()
         self.right_select = QComboBox()
         self.left_select.addItems(HOLES.keys())
@@ -339,13 +369,14 @@ class VerificationGUI(QWidget):
         self.static_point(LEFT_RCM, (0, 1, 0, 1), 13, 'Left RCM')
         self.static_point(RIGHT_RCM, (1, 0, 0, 1), 13, 'Right RCM')
         self.static_point(CAMERA_LENS, (1, 1, 0, 1), 12, 'Camera')
-        for name, point in HOLES.items():
-            self.static_point(point, (0.2, 0.7, 1, 1), 9, name)
+        self.hole_items = []
+        self.rebuild_hole_points()
         # Expected poses: cyan/magenta. Measured poses: green/red.
         self.expected_left = self.make_tool((0, 1, 1, 1), dashed=False)
         self.expected_right = self.make_tool((1, 0.3, 1, 1), dashed=False)
         self.measured_left = self.make_tool((0, 1, 0, 1), dashed=False)
         self.measured_right = self.make_tool((1, 0.1, 0.1, 1), dashed=False)
+        self.board_select.currentTextChanged.connect(self.switch_board)
         self.left_select.currentTextChanged.connect(self.refresh)
         self.right_select.currentTextChanged.connect(self.refresh)
         self.thread = SerialData()
@@ -357,11 +388,53 @@ class VerificationGUI(QWidget):
         self.thread.start()
         self.refresh()
 
+    def rebuild_hole_points(self):
+        for item in self.hole_items:
+            self.view.removeItem(item)
+        self.hole_items.clear()
+        for name, point in self.holes.items():
+            self.hole_items.extend(self.static_point(point, (0.2, 0.7, 1, 1), 9, name))
+
+    def switch_board(self, board_name):
+        config = BOARD_CONFIGS[board_name]
+        self.board_name = board_name
+        self.holes = {name: fusion_to_wrf(p) for name, p in config['holes'].items()}
+        self.left_zero_hole = config['left_zero']
+        self.right_zero_hole = config['right_zero']
+        # A different board changes the known reference orientations.
+        self.zero = None
+        self.zero_reference = None
+        self.left_select.blockSignals(True)
+        self.right_select.blockSignals(True)
+        for selector, zero_hole in ((self.left_select, self.left_zero_hole),
+                                    (self.right_select, self.right_zero_hole)):
+            selector.clear()
+            selector.addItems(self.holes.keys())
+            selector.setCurrentText(zero_hole)
+        self.left_select.blockSignals(False)
+        self.right_select.blockSignals(False)
+        self.rebuild_hole_points()
+        self.zero_button.setText(
+            f'STEP 1 — Zero: LEFT {self.left_zero_hole}, RIGHT {self.right_zero_hole}, tick marks DOWN (Z)')
+        self.instructions.setText(
+            f'FIRST: Put LEFT tip at {self.left_zero_hole} and RIGHT tip at {self.right_zero_hole}; '
+            'align BOTH cylinder tick marks down and press Z. THEN select verification holes. '
+            'Changing verification holes does not alter calibration.')
+        self.status.setText(
+            f'{board_name} selected — NOT ZEROED. LEFT {self.left_zero_hole}, '
+            f'RIGHT {self.right_zero_hole}; tick marks down; press Z.')
+        # Hide stale measured geometry until the new board is zeroed.
+        for parts in (self.measured_left, self.measured_right):
+            for name in ('shaft', 'beam', 'x', 'y'):
+                parts[name].setData(pos=np.full((2, 3), np.nan))
+            parts['tip'].setData(pos=np.full((1, 3), np.nan))
+        self.refresh()
+
     def on_converged(self, result):
         self.status.setText(
             f"Both IMUs stable after {result['elapsed_s']:.2f} s "
             f"(left {result['left_samples']} samples; right {result['right_samples']} samples). "
-            f"Gain stays at {MADGWICK_GAIN}. Now place tools at fixed zero holes and press Z."
+            f"Gain stays at {MADGWICK_GAIN}. Now place tools at selected board zero holes and press Z."
         )
         self.show()
         self.raise_()
@@ -377,10 +450,13 @@ class VerificationGUI(QWidget):
         self.status.setText(message)
 
     def static_point(self, position, color, size, name):
-        self.view.addItem(gl.GLScatterPlotItem(pos=np.asarray(position).reshape(1, 3),
-                                               color=color, size=size, pxMode=True))
-        self.view.addItem(gl.GLTextItem(pos=np.asarray(position), text=name,
-                                       color=(255, 255, 255, 255)))
+        dot = gl.GLScatterPlotItem(pos=np.asarray(position).reshape(1, 3),
+                                   color=color, size=size, pxMode=True)
+        label = gl.GLTextItem(pos=np.asarray(position), text=name,
+                              color=(255, 255, 255, 255))
+        self.view.addItem(dot)
+        self.view.addItem(label)
+        return dot, label
 
     def make_tool(self, color, dashed=False):
         hidden = np.full((2, 3), np.nan)
@@ -424,15 +500,15 @@ class VerificationGUI(QWidget):
         try:
             new_zero = {'left': as_rotation(left_q), 'right': as_rotation(right_q)}
             new_reference = {
-                'left': expected_rotation(LEFT_RCM, HOLES[LEFT_ZERO_HOLE], LEFT_X_SIGN),
-                'right': expected_rotation(RIGHT_RCM, HOLES[RIGHT_ZERO_HOLE], RIGHT_X_SIGN),
+                'left': expected_rotation(LEFT_RCM, self.holes[self.left_zero_hole], LEFT_X_SIGN),
+                'right': expected_rotation(RIGHT_RCM, self.holes[self.right_zero_hole], RIGHT_X_SIGN),
             }
         except (ValueError, TypeError) as exc:
             self.status.setText(f'Zero failed: {exc}')
             return
         self.zero = new_zero
         self.zero_reference = new_reference
-        self.status.setText('ZEROED — LEFT R1C1 / RIGHT R1C2. Select verification holes above. Tick marks must remain down for full orientation comparison.')
+        self.status.setText(f'ZEROED — LEFT {self.left_zero_hole} / RIGHT {self.right_zero_hole}. Select verification holes above.')
         self.refresh()
 
     def keyPressEvent(self, event):
@@ -450,12 +526,14 @@ class VerificationGUI(QWidget):
              self.right_info, self.expected_right, self.measured_right),
         ]:
             name = selector.currentText()
-            hole = HOLES[name]
+            if name not in self.holes:
+                continue
+            hole = self.holes[name]
             exp_rot = expected_rotation(rcm, hole, sign)
             exp_tof = expected_tof(rcm, hole, offset)
             # Drawing expected geometry with the expected ToF places its tip at the hole.
             self.draw_tool(expected_item, rcm, exp_rot, exp_tof, offset)
-            lines = [f'{side.upper()} — verifying {name} (zero: {LEFT_ZERO_HOLE if side == "left" else RIGHT_ZERO_HOLE})',
+            lines = [f'{side.upper()} — verifying {name} (zero: {self.left_zero_hole if side == "left" else self.right_zero_hole})',
                      f'Expected ToF (mm): {exp_tof:.3f}',
                      f'Expected WRF quaternion [w,x,y,z]: {quat_text(exp_rot)}',
                      f'Expected tip WRF (mm): {np.round(hole, 3)}']
