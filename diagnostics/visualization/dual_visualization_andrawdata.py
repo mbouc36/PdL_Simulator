@@ -324,7 +324,8 @@ class SerialData(QThread):
                     if len(d) < 2:
                         continue
                     self.sample.emit((now, left_q.copy(), float(d[0]) * TOF_TO_MM,
-                                      right_q.copy(), float(d[1]) * TOF_TO_MM))
+                                      right_q.copy(), float(d[1]) * TOF_TO_MM,
+                                      diagnostics))
                 except Exception as exc:
                     self.error.emit(f'Data error: {exc}')
         finally:
